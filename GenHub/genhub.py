@@ -4,8 +4,10 @@ import json
 from hashlib import sha256
 
 import aiohttp
+from aiohttp import web
 from redbot.core import commands, Config
 from redbot.core.bot import Red
+
 
 class GenHub(commands.Cog):
     """GitHub to Discord Forum Router"""
@@ -24,27 +26,29 @@ class GenHub(commands.Cog):
         }
         self.config.register_global(**default_global)
         self.server = None
+        self.runner = None
         self.task = None
         self.thread_cache = {}
 
     async def cog_load(self):
+        # ✅ must be indented
         self.task = asyncio.create_task(self.start_server())
 
     async def cog_unload(self):
-        if self.server:
-            self.server.close()
-            await self.server.wait_closed()
+        if self.runner:
+            await self.runner.cleanup()
         if self.task:
             self.task.cancel()
 
     async def start_server(self):
+        print(">>> Starting aiohttp webhook server...")
         host = await self.config.webhook_host()
         port = await self.config.webhook_port()
-        app = aiohttp.web.Application()
+        app = web.Application()
         app.router.add_post("/github", self.webhook_handler)
-        runner = aiohttp.web.AppRunner(app)
-        await runner.setup()
-        self.server = aiohttp.web.TCPSite(runner, host, port)
+        self.runner = web.AppRunner(app)
+        await self.runner.setup()
+        self.server = web.TCPSite(self.runner, host, port)
         try:
             await self.server.start()
             print(f"Webhook server started on {host}:{port}")
@@ -252,6 +256,4 @@ class GenHub(commands.Cog):
             message += f"{key}: {value}/n"
         await ctx.send(message)
 
-async def setup(bot: Red):
-    """Add the cog to the bot."""
-    await bot.add_cog(GenHub(bot))
+
