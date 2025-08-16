@@ -226,8 +226,8 @@ class GitHubEventHandlers:
                 prefix = f"# **[ Review from {entry['author']} ]({entry['url']})**\n"
                 await send_message(thread, entry["body"], prefix=prefix)
 
-            # Then post each inline comment
-            for body, url in entry["comments"]:
+            # ✅ Post inline comments oldest → newest
+            for body, url in reversed(entry["comments"]):
                 prefix = f"# **[ New PR review comment from {entry['author']} ]({url})**\n"
                 await send_message(thread, body, prefix=prefix)
 
