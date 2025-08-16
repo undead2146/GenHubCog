@@ -1,10 +1,13 @@
 import discord
+import asyncio
 from .utils import send_message, resolve_tag
 
 
 class GitHubEventHandlers:
     def __init__(self, cog):
         self.cog = cog
+        # Store pending reviews temporarily to group body + comments
+        self.pending_reviews = {}
 
     async def process_payload(self, request, data):
         repo_full_name = data.get("repository", {}).get("full_name")
@@ -61,7 +64,6 @@ class GitHubEventHandlers:
 
         thread = await self.find_thread(forum_id, issue_number)
         if not thread and forum:
-            # Auto-create missing thread
             open_tag_id = await self.cog.config.issues_open_tag_id()
             tag = resolve_tag(forum, open_tag_id)
             thread_with_msg = await forum.create_thread(
@@ -89,28 +91,6 @@ class GitHubEventHandlers:
                 f"🔄 Issue reopened: **{issue_title}** Reopened By: {issue_author} {role_mention}",
             )
 
-        # Feed chat announcements
-        feed_chat_id = await self.cog.config.issues_feed_chat_id()
-        if feed_chat_id:
-            feed_chat = self.cog.bot.get_channel(feed_chat_id)
-            if feed_chat:
-                if action == "opened":
-                    await send_message(
-                        feed_chat,
-                        f"{role_mention} New issue opened: "
-                        f"**[{issue_title}]({issue_url})** by {issue_author}",
-                    )
-                elif action == "closed":
-                    await send_message(
-                        feed_chat,
-                        f"Issue closed: **[{issue_title}]({issue_url})** Closed By: {issue_author} {role_mention}",
-                    )
-                elif action == "reopened":
-                    await send_message(
-                        feed_chat,
-                        f"Issue reopened: **[{issue_title}]({issue_url})** Reopened By: {issue_author} {role_mention}",
-                    )
-
     async def handle_pull_request(self, data):
         pr_number = data["pull_request"]["number"]
         pr_title = data["pull_request"]["title"]
@@ -137,7 +117,6 @@ class GitHubEventHandlers:
 
         thread = await self.find_thread(forum_id, pr_number)
         if not thread and forum:
-            # Auto-create missing thread
             open_tag_id = await self.cog.config.prs_open_tag_id()
             tag = resolve_tag(forum, open_tag_id)
             thread_with_msg = await forum.create_thread(
@@ -174,92 +153,94 @@ class GitHubEventHandlers:
                 f"🔄 PR reopened: **{pr_title}** Reopened By: {pr_author} {role_mention}",
             )
 
-        # Feed chat announcements
-        feed_chat_id = await self.cog.config.prs_feed_chat_id()
-        if feed_chat_id:
-            feed_chat = self.cog.bot.get_channel(feed_chat_id)
-            if feed_chat:
-                if action == "opened":
-                    await send_message(
-                        feed_chat,
-                        f"{role_mention} New pull request opened: "
-                        f"**[{pr_title}]({pr_url})** by {pr_author}",
-                    )
-                elif action == "closed":
-                    if data["pull_request"].get("merged"):
-                        await send_message(
-                            feed_chat,
-                            f"PR merged: **[{pr_title}]({pr_url})** Merged By: {pr_author} {role_mention}",
-                        )
-                    else:
-                        await send_message(
-                            feed_chat,
-                            f"PR closed: **[{pr_title}]({pr_url})** Closed By: {pr_author} {role_mention}",
-                        )
-                elif action == "reopened":
-                    await send_message(
-                        feed_chat,
-                        f"PR reopened: **[{pr_title}]({pr_url})** Reopened By: {pr_author} {role_mention}",
-                    )
-
     # ---------------------------
-    # Comment/Review Handler
+    # Review Batching
     # ---------------------------
 
-    async def _handle_comment_or_review(
-        self,
-        data: dict,
-        number: int,
-        body: str,
-        author: str,
-        url: str,
-        is_pr: bool,
-        prefix_label: str,
-    ):
-        """Generic handler for issue/PR comments and reviews."""
+    async def handle_pull_request_review(self, data):
+        if data.get("action") != "submitted":
+            return
 
-        forum_id = (
-            await self.cog.config.prs_forum_id()
-            if is_pr
-            else await self.cog.config.issues_forum_id()
+        pr_number = data["pull_request"]["number"]
+        review_id = data["review"]["id"]
+        review_body = data["review"]["body"]
+        review_author = data["review"]["user"]["login"]
+        review_url = data["review"]["html_url"]
+
+        key = (pr_number, review_id)
+        entry = self.pending_reviews.setdefault(
+            key,
+            {"author": review_author, "url": review_url, "body": None, "comments": []},
         )
-        prefix = f"# **[ {prefix_label} from {author} ]({url})**\n"
+        entry["body"] = review_body
 
-        thread = await self.find_thread(forum_id, number)
+        await self._schedule_flush(pr_number, review_id, data)
 
-        if not thread and forum_id:
-            forum = self.cog.bot.get_channel(forum_id)
-            if forum:
-                open_tag_id = (
-                    await self.cog.config.prs_open_tag_id()
-                    if is_pr
-                    else await self.cog.config.issues_open_tag_id()
-                )
-                tag = resolve_tag(forum, open_tag_id)
-                title = (
-                    data["issue"]["title"]
-                    if "issue" in data
-                    else data["pull_request"]["title"]
-                )
-                html_url = (
-                    data["issue"]["html_url"]
-                    if "issue" in data
-                    else data["pull_request"]["html_url"]
-                )
+    async def handle_pull_request_review_comment(self, data):
+        pr_number = data["pull_request"]["number"]
+        review_id = data["comment"]["pull_request_review_id"]
+        comment_body = data["comment"]["body"]
+        comment_author = data["comment"]["user"]["login"]
+        comment_url = data["comment"]["html_url"]
 
-                thread_with_msg = await forum.create_thread(
-                    name=f"「#{number}」{title}",
-                    content=f"[#{number}]({html_url})",
-                    applied_tags=[tag] if tag else [],
-                )
-                thread = thread_with_msg.thread
-                self.cog.thread_cache[number] = thread.id
+        key = (pr_number, review_id)
+        entry = self.pending_reviews.setdefault(
+            key,
+            {"author": comment_author, "url": comment_url, "body": None, "comments": []},
+        )
+        entry["comments"].append((comment_body, comment_url))
 
-                await send_message(thread, body, prefix=prefix)
+        await self._schedule_flush(pr_number, review_id, data)
+
+    async def _schedule_flush(self, pr_number, review_id, data):
+        key = (pr_number, review_id)
+
+        async def flush():
+            await asyncio.sleep(2)  # wait for all events to arrive
+            entry = self.pending_reviews.pop(key, None)
+            if not entry:
                 return
 
-        if thread:
-            await send_message(thread, body, prefix=prefix)
+            forum_id = await self.cog.config.prs_forum_id()
+            thread = await self.find_thread(forum_id, pr_number)
+            if not thread:
+                forum = self.cog.bot.get_channel(forum_id)
+                if forum:
+                    open_tag_id = await self.cog.config.prs_open_tag_id()
+                    tag = resolve_tag(forum, open_tag_id)
+                    pr_title = data["pull_request"]["title"]
+                    pr_url = data["pull_request"]["html_url"]
+                    thread_with_msg = await forum.create_thread(
+                        name=f"「#{pr_number}」{pr_title}",
+                        content=f"[#{pr_number}]({pr_url})",
+                        applied_tags=[tag] if tag else [],
+                    )
+                    thread = thread_with_msg.thread
+                    self.cog.thread_cache[pr_number] = thread.id
+
+            if not thread:
+                return
+
+            # Post review body first
+            if entry["body"]:
+                prefix = f"# **[ Review from {entry['author']} ]({entry['url']})**\n"
+                await send_message(thread, entry["body"], prefix=prefix)
+
+            # Then post each inline comment
+            for body, url in entry["comments"]:
+                prefix = f"# **[ New PR review comment from {entry['author']} ]({url})**\n"
+                await send_message(thread, body, prefix=prefix)
+
+        # Cancel any existing flush task and reschedule
+        if key in self.pending_reviews and "task" in self.pending_reviews[key]:
+            self.pending_reviews[key]["task"].cancel()
+
+        task = asyncio.create_task(flush())
+        self.pending_reviews[key]["task"] = task
+
+    # ---------------------------
+    # Issue/PR Comments (not reviews)
+    # ---------------------------
 
     async def handle_issue_comment(self, data):
         issue_number = data["issue"]["number"]
@@ -279,37 +260,53 @@ class GitHubEventHandlers:
             prefix_label="New PR comment" if is_pr else "New issue comment",
         )
 
-    async def handle_pull_request_review(self, data):
-        pr_number = data["pull_request"]["number"]
-        review_body = data["review"]["body"]
-        review_author = data["review"]["user"]["login"]
-        review_url = data["review"]["html_url"]
-
-        await self._handle_comment_or_review(
-            data=data,
-            number=pr_number,
-            body=review_body,
-            author=review_author,
-            url=review_url,
-            is_pr=True,
-            prefix_label="Review",
+    async def _handle_comment_or_review(
+        self,
+        data: dict,
+        number: int,
+        body: str,
+        author: str,
+        url: str,
+        is_pr: bool,
+        prefix_label: str,
+    ):
+        forum_id = (
+            await self.cog.config.prs_forum_id()
+            if is_pr
+            else await self.cog.config.issues_forum_id()
         )
+        prefix = f"# **[ {prefix_label} from {author} ]({url})**\n"
 
-    async def handle_pull_request_review_comment(self, data):
-        pr_number = data["pull_request"]["number"]
-        comment_body = data["comment"]["body"]
-        comment_author = data["comment"]["user"]["login"]
-        comment_url = data["comment"]["html_url"]
+        thread = await self.find_thread(forum_id, number)
+        if not thread and forum_id:
+            forum = self.cog.bot.get_channel(forum_id)
+            if forum:
+                open_tag_id = (
+                    await self.cog.config.prs_open_tag_id()
+                    if is_pr
+                    else await self.cog.config.issues_open_tag_id()
+                )
+                tag = resolve_tag(forum, open_tag_id)
+                title = (
+                    data["issue"]["title"]
+                    if "issue" in data
+                    else data["pull_request"]["title"]
+                )
+                html_url = (
+                    data["issue"]["html_url"]
+                    if "issue" in data
+                    else data["pull_request"]["html_url"]
+                )
+                thread_with_msg = await forum.create_thread(
+                    name=f"「#{number}」{title}",
+                    content=f"[#{number}]({html_url})",
+                    applied_tags=[tag] if tag else [],
+                )
+                thread = thread_with_msg.thread
+                self.cog.thread_cache[number] = thread.id
 
-        await self._handle_comment_or_review(
-            data=data,
-            number=pr_number,
-            body=comment_body,
-            author=comment_author,
-            url=comment_url,
-            is_pr=True,
-            prefix_label="New PR review comment",
-        )
+        if thread and body:
+            await send_message(thread, body, prefix=prefix)
 
     # ---------------------------
     # Thread Finder
