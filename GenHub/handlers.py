@@ -44,6 +44,8 @@ class GitHubEventHandlers:
 
         forum_id = await self.cog.config.issues_forum_id()
         forum = self.cog.bot.get_channel(forum_id)
+        contributor_role_id = await self.cog.config.contributor_role_id()
+        role_mention = f"<@&{contributor_role_id}>" if contributor_role_id else ""
 
         if action == "opened" and forum:
             open_tag_id = await self.cog.config.issues_open_tag_id()
@@ -74,7 +76,7 @@ class GitHubEventHandlers:
                 if action == "opened":
                     await send_message(
                         feed_chat,
-                        f"<@&1404155973576294400> New issue opened: "
+                        f"{role_mention} New issue opened: "
                         f"**[{issue_title}]({issue_url})** by {issue_author}",
                     )
                 elif action == "closed":
@@ -95,6 +97,8 @@ class GitHubEventHandlers:
 
         forum_id = await self.cog.config.prs_forum_id()
         forum = self.cog.bot.get_channel(forum_id)
+        contributor_role_id = await self.cog.config.contributor_role_id()
+        role_mention = f"<@&{contributor_role_id}>" if contributor_role_id else ""
 
         if action == "opened" and forum:
             open_tag_id = await self.cog.config.prs_open_tag_id()
@@ -131,7 +135,7 @@ class GitHubEventHandlers:
                 if action == "opened":
                     await send_message(
                         feed_chat,
-                        f"<@&1404155973576294400> New pull request opened: "
+                        f"{role_mention} New pull request opened: "
                         f"**[{pr_title}]({pr_url})** by {pr_author}",
                     )
                 elif action == "closed":
@@ -157,14 +161,23 @@ class GitHubEventHandlers:
         forum_id = await self.cog.config.issues_forum_id()
         thread = await self.find_thread(forum_id, issue_number)
         prefix = f"# **[ New comment from {comment_author} ]({comment_url})**\n"
+
+        if not thread and forum_id:
+            forum = self.cog.bot.get_channel(forum_id)
+            if forum:
+                open_tag_id = await self.cog.config.issues_open_tag_id()
+                tag = resolve_tag(forum, open_tag_id)
+                issue_title = data["issue"]["title"]
+                issue_url = data["issue"]["html_url"]
+
+                thread = await forum.create_thread(
+                    name=f"「#{issue_number}」{issue_title}",
+                    content=f"[#{issue_number}]({issue_url})",
+                    applied_tags=[tag] if tag else [],
+                )
+
         if thread:
             await send_message(thread, comment_body, prefix=prefix)
-        else:
-            feed_chat_id = await self.cog.config.issues_feed_chat_id()
-            if feed_chat_id:
-                feed_chat = self.cog.bot.get_channel(feed_chat_id)
-                if feed_chat:
-                    await send_message(feed_chat, comment_body, prefix=prefix)
 
     async def handle_pull_request_review(self, data):
         pr_number = data["pull_request"]["number"]

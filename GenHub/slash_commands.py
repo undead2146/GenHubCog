@@ -24,6 +24,7 @@ class SlashCommands:
         prs_open_tag_id: int = None,
         prs_closed_tag_id: int = None,
         prs_merged_tag_id: int = None,
+        contributor_role_id: int = None,  # NEW
     ):
         updates = {
             "webhook_host": webhook_host,
@@ -38,6 +39,7 @@ class SlashCommands:
             "prs_open_tag_id": prs_open_tag_id,
             "prs_closed_tag_id": prs_closed_tag_id,
             "prs_merged_tag_id": prs_merged_tag_id,
+            "contributor_role_id": contributor_role_id,  # NEW
         }
         for key, value in updates.items():
             if value is not None:

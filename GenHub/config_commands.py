@@ -105,6 +105,11 @@ class ConfigCommands(commands.Cog):
         await self._set_config(ctx, "prs_merged_tag_id", tag_id)
 
     @genhub.command()
+    async def contributorrole(self, ctx, role_id: int):
+        """Set the Contributor role ID for mentions in feed messages."""
+        await self._set_config(ctx, "contributor_role_id", role_id)
+
+    @genhub.command()
     async def showconfig(self, ctx):
         """Show the current GenHub configuration."""
         config = await self.cog.config.all()
@@ -124,5 +129,6 @@ class ConfigCommands(commands.Cog):
             f"**PRs Open Tag ID:** {config['prs_open_tag_id']}\n"
             f"**PRs Closed Tag ID:** {config['prs_closed_tag_id']}\n"
             f"**PRs Merged Tag ID:** {config['prs_merged_tag_id']}\n"
+            f"**Contributor Role ID:** {config['contributor_role_id']}\n"
         )
         await ctx.send(message)
