@@ -42,31 +42,52 @@ class GitHubEventHandlers:
         issue_author = data["issue"]["user"]["login"]
         action = data["action"]
 
-        forum_id = await self.cog.config.issues_forum_id()
-        forum = self.cog.bot.get_channel(forum_id)
         contributor_role_id = await self.cog.config.contributor_role_id()
         role_mention = f"<@&{contributor_role_id}>" if contributor_role_id else ""
+
+        forum_id = await self.cog.config.issues_forum_id()
+        forum = self.cog.bot.get_channel(forum_id)
 
         if action == "opened" and forum:
             open_tag_id = await self.cog.config.issues_open_tag_id()
             tag = resolve_tag(forum, open_tag_id)
-            await forum.create_thread(
+            thread_with_msg = await forum.create_thread(
                 name=f"「#{issue_number}」{issue_title}",
                 content=f"[#{issue_number}]({issue_url})",
                 applied_tags=[tag] if tag else [],
             )
+            thread = thread_with_msg.thread
+            self.cog.thread_cache[issue_number] = thread.id
 
         thread = await self.find_thread(forum_id, issue_number)
+        if not thread and forum:
+            # Auto-create missing thread
+            open_tag_id = await self.cog.config.issues_open_tag_id()
+            tag = resolve_tag(forum, open_tag_id)
+            thread_with_msg = await forum.create_thread(
+                name=f"「#{issue_number}」{issue_title}",
+                content=f"[#{issue_number}]({issue_url})",
+                applied_tags=[tag] if tag else [],
+            )
+            thread = thread_with_msg.thread
+            self.cog.thread_cache[issue_number] = thread.id
+
         if action == "closed" and thread:
             closed_tag_id = await self.cog.config.issues_closed_tag_id()
             tag = resolve_tag(thread.parent, closed_tag_id)
             await thread.edit(applied_tags=[tag] if tag else [])
-            await send_message(thread, f"❌ Issue closed by {issue_author}")
+            await send_message(
+                thread,
+                f"❌ Issue closed: **{issue_title}** Closed By: {issue_author} {role_mention}",
+            )
         elif action == "reopened" and thread:
             open_tag_id = await self.cog.config.issues_open_tag_id()
             tag = resolve_tag(thread.parent, open_tag_id)
             await thread.edit(applied_tags=[tag] if tag else [])
-            await send_message(thread, f"🔄 Issue reopened by {issue_author}")
+            await send_message(
+                thread,
+                f"🔄 Issue reopened: **{issue_title}** Reopened By: {issue_author} {role_mention}",
+            )
 
         # Feed chat announcements
         feed_chat_id = await self.cog.config.issues_feed_chat_id()
@@ -81,11 +102,13 @@ class GitHubEventHandlers:
                     )
                 elif action == "closed":
                     await send_message(
-                        feed_chat, f"Issue closed: **[{issue_title}]({issue_url})**"
+                        feed_chat,
+                        f"Issue closed: **[{issue_title}]({issue_url})** Closed By: {issue_author} {role_mention}",
                     )
                 elif action == "reopened":
                     await send_message(
-                        feed_chat, f"Issue reopened: **[{issue_title}]({issue_url})**"
+                        feed_chat,
+                        f"Issue reopened: **[{issue_title}]({issue_url})** Reopened By: {issue_author} {role_mention}",
                     )
 
     async def handle_pull_request(self, data):
@@ -95,37 +118,61 @@ class GitHubEventHandlers:
         pr_author = data["pull_request"]["user"]["login"]
         action = data["action"]
 
-        forum_id = await self.cog.config.prs_forum_id()
-        forum = self.cog.bot.get_channel(forum_id)
         contributor_role_id = await self.cog.config.contributor_role_id()
         role_mention = f"<@&{contributor_role_id}>" if contributor_role_id else ""
+
+        forum_id = await self.cog.config.prs_forum_id()
+        forum = self.cog.bot.get_channel(forum_id)
 
         if action == "opened" and forum:
             open_tag_id = await self.cog.config.prs_open_tag_id()
             tag = resolve_tag(forum, open_tag_id)
-            await forum.create_thread(
+            thread_with_msg = await forum.create_thread(
                 name=f"「#{pr_number}」{pr_title}",
                 content=f"[#{pr_number}]({pr_url})",
                 applied_tags=[tag] if tag else [],
             )
+            thread = thread_with_msg.thread
+            self.cog.thread_cache[pr_number] = thread.id
 
         thread = await self.find_thread(forum_id, pr_number)
+        if not thread and forum:
+            # Auto-create missing thread
+            open_tag_id = await self.cog.config.prs_open_tag_id()
+            tag = resolve_tag(forum, open_tag_id)
+            thread_with_msg = await forum.create_thread(
+                name=f"「#{pr_number}」{pr_title}",
+                content=f"[#{pr_number}]({pr_url})",
+                applied_tags=[tag] if tag else [],
+            )
+            thread = thread_with_msg.thread
+            self.cog.thread_cache[pr_number] = thread.id
+
         if action == "closed" and thread:
             if data["pull_request"].get("merged"):
                 merged_tag_id = await self.cog.config.prs_merged_tag_id()
                 tag = resolve_tag(thread.parent, merged_tag_id)
                 await thread.edit(applied_tags=[tag] if tag else [])
-                await send_message(thread, f"✅ PR merged by {pr_author}")
+                await send_message(
+                    thread,
+                    f"✅ PR merged: **{pr_title}** Merged By: {pr_author} {role_mention}",
+                )
             else:
                 closed_tag_id = await self.cog.config.prs_closed_tag_id()
                 tag = resolve_tag(thread.parent, closed_tag_id)
                 await thread.edit(applied_tags=[tag] if tag else [])
-                await send_message(thread, f"❌ PR closed by {pr_author}")
+                await send_message(
+                    thread,
+                    f"❌ PR closed: **{pr_title}** Closed By: {pr_author} {role_mention}",
+                )
         elif action == "reopened" and thread:
             open_tag_id = await self.cog.config.prs_open_tag_id()
             tag = resolve_tag(thread.parent, open_tag_id)
             await thread.edit(applied_tags=[tag] if tag else [])
-            await send_message(thread, f"🔄 PR reopened by {pr_author}")
+            await send_message(
+                thread,
+                f"🔄 PR reopened: **{pr_title}** Reopened By: {pr_author} {role_mention}",
+            )
 
         # Feed chat announcements
         feed_chat_id = await self.cog.config.prs_feed_chat_id()
@@ -141,16 +188,78 @@ class GitHubEventHandlers:
                 elif action == "closed":
                     if data["pull_request"].get("merged"):
                         await send_message(
-                            feed_chat, f"PR merged: **[{pr_title}]({pr_url})**"
+                            feed_chat,
+                            f"PR merged: **[{pr_title}]({pr_url})** Merged By: {pr_author} {role_mention}",
                         )
                     else:
                         await send_message(
-                            feed_chat, f"PR closed: **[{pr_title}]({pr_url})**"
+                            feed_chat,
+                            f"PR closed: **[{pr_title}]({pr_url})** Closed By: {pr_author} {role_mention}",
                         )
                 elif action == "reopened":
                     await send_message(
-                        feed_chat, f"PR reopened: **[{pr_title}]({pr_url})**"
+                        feed_chat,
+                        f"PR reopened: **[{pr_title}]({pr_url})** Reopened By: {pr_author} {role_mention}",
                     )
+
+    # ---------------------------
+    # Comment/Review Handler
+    # ---------------------------
+
+    async def _handle_comment_or_review(
+        self,
+        data: dict,
+        number: int,
+        body: str,
+        author: str,
+        url: str,
+        is_pr: bool,
+        prefix_label: str,
+    ):
+        """Generic handler for issue/PR comments and reviews."""
+
+        forum_id = (
+            await self.cog.config.prs_forum_id()
+            if is_pr
+            else await self.cog.config.issues_forum_id()
+        )
+        prefix = f"# **[ {prefix_label} from {author} ]({url})**\n"
+
+        thread = await self.find_thread(forum_id, number)
+
+        if not thread and forum_id:
+            forum = self.cog.bot.get_channel(forum_id)
+            if forum:
+                open_tag_id = (
+                    await self.cog.config.prs_open_tag_id()
+                    if is_pr
+                    else await self.cog.config.issues_open_tag_id()
+                )
+                tag = resolve_tag(forum, open_tag_id)
+                title = (
+                    data["issue"]["title"]
+                    if "issue" in data
+                    else data["pull_request"]["title"]
+                )
+                html_url = (
+                    data["issue"]["html_url"]
+                    if "issue" in data
+                    else data["pull_request"]["html_url"]
+                )
+
+                thread_with_msg = await forum.create_thread(
+                    name=f"「#{number}」{title}",
+                    content=f"[#{number}]({html_url})",
+                    applied_tags=[tag] if tag else [],
+                )
+                thread = thread_with_msg.thread
+                self.cog.thread_cache[number] = thread.id
+
+                await send_message(thread, body, prefix=prefix)
+                return
+
+        if thread:
+            await send_message(thread, body, prefix=prefix)
 
     async def handle_issue_comment(self, data):
         issue_number = data["issue"]["number"]
@@ -158,26 +267,17 @@ class GitHubEventHandlers:
         comment_author = data["comment"]["user"]["login"]
         comment_url = data["comment"]["html_url"]
 
-        forum_id = await self.cog.config.issues_forum_id()
-        thread = await self.find_thread(forum_id, issue_number)
-        prefix = f"# **[ New comment from {comment_author} ]({comment_url})**\n"
+        is_pr = "pull_request" in data["issue"]
 
-        if not thread and forum_id:
-            forum = self.cog.bot.get_channel(forum_id)
-            if forum:
-                open_tag_id = await self.cog.config.issues_open_tag_id()
-                tag = resolve_tag(forum, open_tag_id)
-                issue_title = data["issue"]["title"]
-                issue_url = data["issue"]["html_url"]
-
-                thread = await forum.create_thread(
-                    name=f"「#{issue_number}」{issue_title}",
-                    content=f"[#{issue_number}]({issue_url})",
-                    applied_tags=[tag] if tag else [],
-                )
-
-        if thread:
-            await send_message(thread, comment_body, prefix=prefix)
+        await self._handle_comment_or_review(
+            data=data,
+            number=issue_number,
+            body=comment_body,
+            author=comment_author,
+            url=comment_url,
+            is_pr=is_pr,
+            prefix_label="New PR comment" if is_pr else "New issue comment",
+        )
 
     async def handle_pull_request_review(self, data):
         pr_number = data["pull_request"]["number"]
@@ -185,17 +285,15 @@ class GitHubEventHandlers:
         review_author = data["review"]["user"]["login"]
         review_url = data["review"]["html_url"]
 
-        forum_id = await self.cog.config.prs_forum_id()
-        thread = await self.find_thread(forum_id, pr_number)
-        prefix = f"# **[ Review from {review_author} ]({review_url})**\n"
-        if thread:
-            await send_message(thread, review_body, prefix=prefix)
-        else:
-            feed_chat_id = await self.cog.config.prs_feed_chat_id()
-            if feed_chat_id:
-                feed_chat = self.cog.bot.get_channel(feed_chat_id)
-                if feed_chat:
-                    await send_message(feed_chat, review_body, prefix=prefix)
+        await self._handle_comment_or_review(
+            data=data,
+            number=pr_number,
+            body=review_body,
+            author=review_author,
+            url=review_url,
+            is_pr=True,
+            prefix_label="Review",
+        )
 
     async def handle_pull_request_review_comment(self, data):
         pr_number = data["pull_request"]["number"]
@@ -203,17 +301,19 @@ class GitHubEventHandlers:
         comment_author = data["comment"]["user"]["login"]
         comment_url = data["comment"]["html_url"]
 
-        forum_id = await self.cog.config.prs_forum_id()
-        thread = await self.find_thread(forum_id, pr_number)
-        prefix = f"# **[ New comment from {comment_author} ]({comment_url})**\n"
-        if thread:
-            await send_message(thread, comment_body, prefix=prefix)
-        else:
-            feed_chat_id = await self.cog.config.prs_feed_chat_id()
-            if feed_chat_id:
-                feed_chat = self.cog.bot.get_channel(feed_chat_id)
-                if feed_chat:
-                    await send_message(feed_chat, comment_body, prefix=prefix)
+        await self._handle_comment_or_review(
+            data=data,
+            number=pr_number,
+            body=comment_body,
+            author=comment_author,
+            url=comment_url,
+            is_pr=True,
+            prefix_label="New PR review comment",
+        )
+
+    # ---------------------------
+    # Thread Finder
+    # ---------------------------
 
     async def find_thread(self, forum_id, topic_number):
         if topic_number in self.cog.thread_cache:
