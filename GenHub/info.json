@@ -1,6 +1,6 @@
 {
-    "name": "GenHub",
-    "author": ["ArcticDolphin"],
+    "name": "genhub",
+    "author": ["undead2146"],
     "version": "1.1",
     "short": "GitHub to Discord Forum Router",
     "description": "Receives GitHub webhook events and routes them to the correct Discord forum post.",
