@@ -85,6 +85,11 @@ class ConfigCommands(commands.Cog):
         await self._set_config(ctx, "contributor_role_id", role_id)
 
     @genhub.command()
+    async def token(self, ctx, token: str):
+        """Set the GitHub API token (Personal Access Token)."""
+        await self._set_config(ctx, "github_token", token)
+
+    @genhub.command()
     @commands.is_owner()
     async def reconcile(self, ctx, repo: str = None):
         """Reconcile all forum posts to ensure correct tags are applied.

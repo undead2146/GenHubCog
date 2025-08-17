@@ -362,12 +362,17 @@ class GitHubEventHandlers:
                         if repo_filter and repo_filter.lower() != repo.lower():
                             continue
 
-                        # Fetch from GitHub API
-                        url = f"https://api.github.com/repos/{owner}/{repo}/{kind}/{number}"
-                        headers = {}
-                        secret = await self.cog.config.github_secret()
-                        if secret:
-                            headers["Authorization"] = f"token {secret}"
+                        # Build correct API URL
+                        if kind == "issues":
+                            url = f"https://api.github.com/repos/{owner}/{repo}/issues/{number}"
+                        else:  # pull
+                            url = f"https://api.github.com/repos/{owner}/{repo}/pulls/{number}"
+
+                        # Auth headers
+                        headers = {"Accept": "application/vnd.github+json"}
+                        token = await self.cog.config.github_token()
+                        if token:
+                            headers["Authorization"] = f"Bearer {token}"
 
                         async with session.get(url, headers=headers) as resp:
                             if resp.status != 200:
@@ -387,21 +392,4 @@ class GitHubEventHandlers:
                             tags.append(repo_tag)
 
                         # Compare with current
-                        current = set(t.name.lower() for t in thread.applied_tags)
-                        desired = set(t.name.lower() for t in tags)
-                        if current != desired:
-                            await thread.edit(applied_tags=tags)
-                            print(f"✅ Updated tags for {thread.name}: {desired}")
-                        else:
-                            print(f"ℹ️ Tags already correct for {thread.name}")
-
-                        # Progress counter
-                        progress_msg = f"[{idx}/{total}] Processed {thread.name}"
-                        print(progress_msg)
-                        if ctx and idx % 10 == 0:
-                            await ctx.send(progress_msg)
-
-                        await asyncio.sleep(1)  # avoid rate limits
-
-                    except Exception as e:
-                        print(f"❌ Error reconciling {thread.name}: {e}")
+                        current = set(t.name.lower() for t

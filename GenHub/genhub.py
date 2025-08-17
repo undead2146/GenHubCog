@@ -25,6 +25,7 @@ class GenHub(commands.Cog):
             "issues_feed_chat_id": None,
             "prs_feed_chat_id": None,
             "contributor_role_id": None,
+            "github_token": "",
         }
         self.config.register_global(**default_global)
 
