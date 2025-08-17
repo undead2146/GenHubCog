@@ -85,6 +85,15 @@ class ConfigCommands(commands.Cog):
         await self._set_config(ctx, "contributor_role_id", role_id)
 
     @genhub.command()
+    @commands.is_owner()
+        async def reconcile(self, ctx, repo: str = None):
+            """Reconcile all forum posts to ensure correct tags are applied.
+            Optionally filter by repo name."""
+            await ctx.send("🔄 Starting reconciliation... this may take a while.")
+            await self.cog.handlers.reconcile_forum_tags(ctx, repo_filter=repo)
+            await ctx.send("✅ Reconciliation complete.")
+
+    @genhub.command()
     async def showconfig(self, ctx):
         """Show the current GenHub configuration."""
         config = await self.cog.config.all()
@@ -100,6 +109,5 @@ class ConfigCommands(commands.Cog):
             f"**Issues Feed Chat ID:** {config['issues_feed_chat_id']}\n"
             f"**PRs Feed Chat ID:** {config['prs_feed_chat_id']}\n"
             f"**Contributor Role ID:** {config['contributor_role_id']}\n"
-            "⚠️ Tags (Open/Closed/Merged/Active + repo tags) are now discovered dynamically.\n"
         )
         await ctx.send(message)
