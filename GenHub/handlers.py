@@ -5,7 +5,9 @@ import re
 from .utils import send_message
 
 # Regex to extract GitHub issue/PR link from thread content
-GITHUB_ISSUE_RE = re.compile(r"https://github\.com/([^/]+)/([^/]+)/(issues|pull)/(\d+)")
+GITHUB_ISSUE_RE = re.compile(
+    r"https://github\.com/([^/]+)/([^/]+)/(issues|pull)/(\d+)"
+)
 
 
 class GitHubEventHandlers:
@@ -46,7 +48,9 @@ class GitHubEventHandlers:
     # Thread Management
     # ---------------------------
 
-    async def get_or_create_thread(self, forum_id, repo_full_name, number, title, url, tags):
+    async def get_or_create_thread(
+        self, forum_id, repo_full_name, number, title, url, tags
+    ):
         key = (forum_id, repo_full_name, number)
         thread = await self.find_thread(forum_id, repo_full_name, number)
         if thread:
@@ -57,7 +61,9 @@ class GitHubEventHandlers:
             return None
 
         # Ensure repo tag exists
-        repo_tag = await self._get_or_create_tag(forum, repo_full_name.split("/")[-1])
+        repo_tag = await self._get_or_create_tag(
+            forum, repo_full_name.split("/")[-1]
+        )
         if repo_tag and repo_tag not in tags:
             tags.append(repo_tag)
 
@@ -82,7 +88,9 @@ class GitHubEventHandlers:
         if not forum:
             return None
 
-        repo_tag = await self._get_or_create_tag(forum, repo_full_name.split("/")[-1])
+        repo_tag = await self._get_or_create_tag(
+            forum, repo_full_name.split("/")[-1]
+        )
 
         for thread in forum.threads:
             if f"「#{topic_number}」" in thread.name and repo_tag in thread.applied_tags:
@@ -110,7 +118,9 @@ class GitHubEventHandlers:
             print(f"✅ Created tag '{name}' in forum {forum.name}")
             return tag
         except discord.Forbidden:
-            print(f"❌ Missing Manage Channels permission to create tag '{name}' in {forum.name}")
+            print(
+                f"❌ Missing Manage Channels permission to create tag '{name}' in {forum.name}"
+            )
             return None
         except Exception as e:
             print(f"⚠️ Failed to create tag '{name}' in {forum.name}: {e}")
@@ -157,7 +167,9 @@ class GitHubEventHandlers:
         # Keep repo tag(s), remove old status tags
         current_tags = list(thread.applied_tags)
         status_names = {"open", "closed", "merged", "active"}
-        current_tags = [t for t in current_tags if t.name.lower() not in status_names]
+        current_tags = [
+            t for t in current_tags if t.name.lower() not in status_names
+        ]
 
         # Add new status tag
         current_tags.append(new_status_tag)
@@ -181,7 +193,9 @@ class GitHubEventHandlers:
         forum_id = await self.cog.config.issues_forum_id()
         forum = self.cog.bot.get_channel(forum_id)
         tags = await self._get_issue_tags(forum, issue)
-        thread = await self.get_or_create_thread(forum_id, repo_full_name, number, title, url, tags)
+        thread = await self.get_or_create_thread(
+            forum_id, repo_full_name, number, title, url, tags
+        )
         if not thread:
             return
 
@@ -190,10 +204,16 @@ class GitHubEventHandlers:
 
         if action == "closed":
             await self._update_status_tag(thread, "Closed")
-            await send_message(thread, f"❌ Issue closed: **{title}** by {author} {role_mention}")
+            await send_message(
+                thread,
+                f"❌ Issue closed: **{title}** by {author} {role_mention}",
+            )
         elif action == "reopened":
             await self._update_status_tag(thread, "Open")
-            await send_message(thread, f"🔄 Issue reopened: **{title}** by {author} {role_mention}")
+            await send_message(
+                thread,
+                f"🔄 Issue reopened: **{title}** by {author} {role_mention}",
+            )
         elif action in ("assigned", "unassigned"):
             active_tag = await self._get_or_create_tag(thread.parent, "Active")
             tags = list(thread.applied_tags)
@@ -202,7 +222,9 @@ class GitHubEventHandlers:
             elif action == "unassigned" and active_tag in tags:
                 tags.remove(active_tag)
             await thread.edit(applied_tags=tags)
-            await send_message(thread, f"👤 Issue assignment updated by {author} ({action}).")
+            await send_message(
+                thread, f"👤 Issue assignment updated by {author} ({action})."
+            )
 
     async def handle_pull_request(self, data, repo_full_name):
         pr = data["pull_request"]
@@ -217,7 +239,9 @@ class GitHubEventHandlers:
         forum_id = await self.cog.config.prs_forum_id()
         forum = self.cog.bot.get_channel(forum_id)
         tags = await self._get_pr_tags(forum, pr)
-        thread = await self.get_or_create_thread(forum_id, repo_full_name, number, title, url, tags)
+        thread = await self.get_or_create_thread(
+            forum_id, repo_full_name, number, title, url, tags
+        )
         if not thread:
             return
 
@@ -227,13 +251,22 @@ class GitHubEventHandlers:
         if action == "closed":
             if pr.get("merged") or pr.get("merged_at"):
                 await self._update_status_tag(thread, "Merged")
-                await send_message(thread, f"✅ PR merged: **{title}** by {author} {role_mention}")
+                await send_message(
+                    thread,
+                    f"✅ PR merged: **{title}** by {author} {role_mention}",
+                )
             else:
                 await self._update_status_tag(thread, "Closed")
-                await send_message(thread, f"❌ PR closed: **{title}** by {author} {role_mention}")
+                await send_message(
+                    thread,
+                    f"❌ PR closed: **{title}** by {author} {role_mention}",
+                )
         elif action == "reopened":
             await self._update_status_tag(thread, "Open")
-            await send_message(thread, f"🔄 PR reopened: **{title}** by {author} {role_mention}")
+            await send_message(
+                thread,
+                f"🔄 PR reopened: **{title}** by {author} {role_mention}",
+            )
 
     async def handle_issue_comment(self, data, repo_full_name):
         issue = data["issue"]
@@ -244,11 +277,21 @@ class GitHubEventHandlers:
             data["comment"]["html_url"],
         )
         is_pr = "pull_request" in issue
-        forum_id = await (self.cog.config.prs_forum_id() if is_pr else self.cog.config.issues_forum_id())
+        forum_id = await (
+            self.cog.config.prs_forum_id()
+            if is_pr
+            else self.cog.config.issues_forum_id()
+        )
         forum = self.cog.bot.get_channel(forum_id)
 
-        tags = await (self._get_pr_tags(forum, issue) if is_pr else self._get_issue_tags(forum, issue))
-        thread = await self.get_or_create_thread(forum_id, repo_full_name, number, issue["title"], issue["html_url"], tags)
+        tags = await (
+            self._get_pr_tags(forum, issue)
+            if is_pr
+            else self._get_issue_tags(forum, issue)
+        )
+        thread = await self.get_or_create_thread(
+            forum_id, repo_full_name, number, issue["title"], issue["html_url"], tags
+        )
         if thread and body:
             prefix = f"# **[ {'New PR comment' if is_pr else 'New issue comment'} from {author} ]({url})**\n"
             await send_message(thread, body, prefix=prefix)
@@ -264,7 +307,8 @@ class GitHubEventHandlers:
 
         key = (repo_full_name, pr_number, review_id)
         entry = self.pending_reviews.setdefault(
-            key, {"author": review_author, "url": review_url, "body": None, "comments": []}
+            key,
+            {"author": review_author, "url": review_url, "body": None, "comments": []},
         )
         entry["body"] = review_body
         await self._schedule_flush(repo_full_name, pr_number, review_id, data)
@@ -278,7 +322,8 @@ class GitHubEventHandlers:
 
         key = (repo_full_name, pr_number, review_id)
         entry = self.pending_reviews.setdefault(
-            key, {"author": comment_author, "url": comment_url, "body": None, "comments": []}
+            key,
+            {"author": comment_author, "url": comment_url, "body": None, "comments": []},
         )
         entry["comments"].append((comment_body, comment_url))
         await self._schedule_flush(repo_full_name, pr_number, review_id, data)
@@ -300,7 +345,12 @@ class GitHubEventHandlers:
 
             tags = await self._get_pr_tags(forum, pr_data)
             thread = await self.get_or_create_thread(
-                forum_id, repo_full_name, pr_number, pr_data["title"], pr_data["html_url"], tags
+                forum_id,
+                repo_full_name,
+                pr_number,
+                pr_data["title"],
+                pr_data["html_url"],
+                tags,
             )
             if not thread:
                 return
@@ -321,7 +371,7 @@ class GitHubEventHandlers:
     # Reconciliation
     # ---------------------------
 
-async def reconcile_forum_tags(self, ctx=None, repo_filter: str = None):
+    async def reconcile_forum_tags(self, ctx=None, repo_filter: str = None):
         """Go over all forum posts in Issues/PRs forums and fix their tags."""
         issues_forum_id = await self.cog.config.issues_forum_id()
         prs_forum_id = await self.cog.config.prs_forum_id()
@@ -338,16 +388,20 @@ async def reconcile_forum_tags(self, ctx=None, repo_filter: str = None):
 
             total = len(threads)
             if ctx:
-                await ctx.send(f"🔄 Reconciling **{total}** threads in forum: {forum.name}")
+                await ctx.send(
+                    f"🔄 Reconciling **{total}** threads in forum: {forum.name}"
+                )
 
             print(f"🔄 Reconciling {total} threads in forum: {forum.name}")
 
             async with aiohttp.ClientSession() as session:
                 for idx, thread in enumerate(threads, start=1):
                     try:
-                        # Get first message content (the one with the GitHub link)
+                        # Get first message content
                         first_msg = None
-                        async for msg in thread.history(limit=1, oldest_first=True):
+                        async for msg in thread.history(
+                            limit=1, oldest_first=True
+                        ):
                             first_msg = msg
                         if not first_msg:
                             continue
@@ -392,14 +446,20 @@ async def reconcile_forum_tags(self, ctx=None, repo_filter: str = None):
                         if repo_tag and repo_tag not in tags:
                             tags.append(repo_tag)
 
-                        # Compare with current tags
-                        current = set(t.name.lower() for t in thread.applied_tags)
+                        # Compare with current
+                        current = set(
+                            t.name.lower() for t in thread.applied_tags
+                        )
                         desired = set(t.name.lower() for t in tags)
                         if current != desired:
                             await thread.edit(applied_tags=tags)
-                            print(f"✅ Updated tags for {thread.name}: {desired}")
+                            print(
+                                f"✅ Updated tags for {thread.name}: {desired}"
+                            )
                         else:
-                            print(f"ℹ️ Tags already correct for {thread.name}")
+                            print(
+                                f"ℹ️ Tags already correct for {thread.name}"
+                            )
 
                         # Progress counter
                         progress_msg = f"[{idx}/{total}] Processed {thread.name}"
