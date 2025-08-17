@@ -321,7 +321,7 @@ class GitHubEventHandlers:
     # Reconciliation
     # ---------------------------
 
-    async def reconcile_forum_tags(self, ctx=None, repo_filter: str = None):
+async def reconcile_forum_tags(self, ctx=None, repo_filter: str = None):
         """Go over all forum posts in Issues/PRs forums and fix their tags."""
         issues_forum_id = await self.cog.config.issues_forum_id()
         prs_forum_id = await self.cog.config.prs_forum_id()
@@ -331,6 +331,7 @@ class GitHubEventHandlers:
             if not forum:
                 continue
 
+            # Collect active + archived threads
             threads = list(forum.threads)
             async for t in forum.archived_threads(limit=None):
                 threads.append(t)
@@ -344,7 +345,7 @@ class GitHubEventHandlers:
             async with aiohttp.ClientSession() as session:
                 for idx, thread in enumerate(threads, start=1):
                     try:
-                        # Get first message content
+                        # Get first message content (the one with the GitHub link)
                         first_msg = None
                         async for msg in thread.history(limit=1, oldest_first=True):
                             first_msg = msg
@@ -391,5 +392,22 @@ class GitHubEventHandlers:
                         if repo_tag and repo_tag not in tags:
                             tags.append(repo_tag)
 
-                        # Compare with current
-                        current = set(t.name.lower() for t
+                        # Compare with current tags
+                        current = set(t.name.lower() for t in thread.applied_tags)
+                        desired = set(t.name.lower() for t in tags)
+                        if current != desired:
+                            await thread.edit(applied_tags=tags)
+                            print(f"✅ Updated tags for {thread.name}: {desired}")
+                        else:
+                            print(f"ℹ️ Tags already correct for {thread.name}")
+
+                        # Progress counter
+                        progress_msg = f"[{idx}/{total}] Processed {thread.name}"
+                        print(progress_msg)
+                        if ctx and idx % 10 == 0:
+                            await ctx.send(progress_msg)
+
+                        await asyncio.sleep(1)  # avoid rate limits
+
+                    except Exception as e:
+                        print(f"❌ Error reconciling {thread.name}: {e}")
