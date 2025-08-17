@@ -86,12 +86,12 @@ class ConfigCommands(commands.Cog):
 
     @genhub.command()
     @commands.is_owner()
-        async def reconcile(self, ctx, repo: str = None):
-            """Reconcile all forum posts to ensure correct tags are applied.
-            Optionally filter by repo name."""
-            await ctx.send("🔄 Starting reconciliation... this may take a while.")
-            await self.cog.handlers.reconcile_forum_tags(ctx, repo_filter=repo)
-            await ctx.send("✅ Reconciliation complete.")
+    async def reconcile(self, ctx, repo: str = None):
+        """Reconcile all forum posts to ensure correct tags are applied.
+        Optionally filter by repo name."""
+        await ctx.send("🔄 Starting reconciliation... this may take a while.")
+        await self.cog.handlers.reconcile_forum_tags(ctx, repo_filter=repo)
+        await ctx.send("✅ Reconciliation complete.")
 
     @genhub.command()
     async def showconfig(self, ctx):
