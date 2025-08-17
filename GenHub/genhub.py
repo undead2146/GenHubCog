@@ -24,12 +24,7 @@ class GenHub(commands.Cog):
             "prs_forum_id": None,
             "issues_feed_chat_id": None,
             "prs_feed_chat_id": None,
-            "issues_open_tag_id": None,
-            "issues_closed_tag_id": None,
-            "prs_open_tag_id": None,
-            "prs_closed_tag_id": None,
-            "prs_merged_tag_id": None,
-            "contributor_role_id": None,  # NEW
+            "contributor_role_id": None,
         }
         self.config.register_global(**default_global)
 

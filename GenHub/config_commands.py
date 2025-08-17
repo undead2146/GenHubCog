@@ -80,31 +80,6 @@ class ConfigCommands(commands.Cog):
         await self._set_config(ctx, "prs_feed_chat_id", channel_id)
 
     @genhub.command()
-    async def issuesopentag(self, ctx, tag_id: int):
-        """Set the Issues forum 'Open' tag ID."""
-        await self._set_config(ctx, "issues_open_tag_id", tag_id)
-
-    @genhub.command()
-    async def issuesclosedtag(self, ctx, tag_id: int):
-        """Set the Issues forum 'Closed' tag ID."""
-        await self._set_config(ctx, "issues_closed_tag_id", tag_id)
-
-    @genhub.command()
-    async def prsopentag(self, ctx, tag_id: int):
-        """Set the PR forum 'Open' tag ID."""
-        await self._set_config(ctx, "prs_open_tag_id", tag_id)
-
-    @genhub.command()
-    async def prsclosedtag(self, ctx, tag_id: int):
-        """Set the PR forum 'Closed' tag ID."""
-        await self._set_config(ctx, "prs_closed_tag_id", tag_id)
-
-    @genhub.command()
-    async def prsmergedtag(self, ctx, tag_id: int):
-        """Set the PR forum 'Merged' tag ID."""
-        await self._set_config(ctx, "prs_merged_tag_id", tag_id)
-
-    @genhub.command()
     async def contributorrole(self, ctx, role_id: int):
         """Set the Contributor role ID for mentions in feed messages."""
         await self._set_config(ctx, "contributor_role_id", role_id)
@@ -124,11 +99,7 @@ class ConfigCommands(commands.Cog):
             f"**PRs Forum ID:** {config['prs_forum_id']}\n"
             f"**Issues Feed Chat ID:** {config['issues_feed_chat_id']}\n"
             f"**PRs Feed Chat ID:** {config['prs_feed_chat_id']}\n"
-            f"**Issues Open Tag ID:** {config['issues_open_tag_id']}\n"
-            f"**Issues Closed Tag ID:** {config['issues_closed_tag_id']}\n"
-            f"**PRs Open Tag ID:** {config['prs_open_tag_id']}\n"
-            f"**PRs Closed Tag ID:** {config['prs_closed_tag_id']}\n"
-            f"**PRs Merged Tag ID:** {config['prs_merged_tag_id']}\n"
             f"**Contributor Role ID:** {config['contributor_role_id']}\n"
+            "⚠️ Tags (Open/Closed/Merged/Active + repo tags) are now discovered dynamically.\n"
         )
         await ctx.send(message)
