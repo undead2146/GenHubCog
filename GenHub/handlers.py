@@ -200,19 +200,28 @@ class GitHubEventHandlers:
             return
 
         contributor_role_id = await self.cog.config.contributor_role_id()
-        role_mention = f"<@&{contributor_role_id}>" if contributor_role_id else ""
+        role = thread.guild.get_role(contributor_role_id) if contributor_role_id else None
+        role_mention = role.mention if role else ""
 
-        if action == "closed":
+        if action == "opened":
+            await send_message(
+                thread,
+                f"🆕 **Issue created:** [{title}]({url})\n"
+                f"👤 Created by: **{author}** {role_mention}"
+            )
+        elif action == "closed":
             await self._update_status_tag(thread, "Closed")
             await send_message(
                 thread,
-                f"❌ Issue closed: **{title}** by {author} {role_mention}",
+                f"❌ **Issue closed:** [{title}]({url})\n"
+                f"👤 Closed by: **{author}** {role_mention}"
             )
         elif action == "reopened":
             await self._update_status_tag(thread, "Open")
             await send_message(
                 thread,
-                f"🔄 Issue reopened: **{title}** by {author} {role_mention}",
+                f"🔄 **Issue reopened:** [{title}]({url})\n"
+                f"👤 Reopened by: **{author}** {role_mention}"
             )
         elif action in ("assigned", "unassigned"):
             active_tag = await self._get_or_create_tag(thread.parent, "Active")
@@ -223,7 +232,7 @@ class GitHubEventHandlers:
                 tags.remove(active_tag)
             await thread.edit(applied_tags=tags)
             await send_message(
-                thread, f"👤 Issue assignment updated by {author} ({action})."
+                thread, f"👤 Issue assignment updated by **{author}** ({action})."
             )
 
     async def handle_pull_request(self, data, repo_full_name):
@@ -246,26 +255,36 @@ class GitHubEventHandlers:
             return
 
         contributor_role_id = await self.cog.config.contributor_role_id()
-        role_mention = f"<@&{contributor_role_id}>" if contributor_role_id else ""
+        role = thread.guild.get_role(contributor_role_id) if contributor_role_id else None
+        role_mention = role.mention if role else ""
 
-        if action == "closed":
+        if action == "opened":
+            await send_message(
+                thread,
+                f"🆕 **Pull Request created:** [{title}]({url})\n"
+                f"👤 Created by: **{author}** {role_mention}"
+            )
+        elif action == "closed":
             if pr.get("merged") or pr.get("merged_at"):
                 await self._update_status_tag(thread, "Merged")
                 await send_message(
                     thread,
-                    f"✅ PR merged: **{title}** by {author} {role_mention}",
+                    f"✅ **PR merged:** [{title}]({url})\n"
+                    f"👤 Merged by: **{author}** {role_mention}"
                 )
             else:
                 await self._update_status_tag(thread, "Closed")
                 await send_message(
                     thread,
-                    f"❌ PR closed: **{title}** by {author} {role_mention}",
+                    f"❌ **PR closed:** [{title}]({url})\n"
+                    f"👤 Closed by: **{author}** {role_mention}"
                 )
         elif action == "reopened":
             await self._update_status_tag(thread, "Open")
             await send_message(
                 thread,
-                f"🔄 PR reopened: **{title}** by {author} {role_mention}",
+                f"🔄 **PR reopened:** [{title}]({url})\n"
+                f"👤 Reopened by: **{author}** {role_mention}"
             )
 
     async def handle_issue_comment(self, data, repo_full_name):
@@ -292,9 +311,15 @@ class GitHubEventHandlers:
         thread = await self.get_or_create_thread(
             forum_id, repo_full_name, number, issue["title"], issue["html_url"], tags
         )
-        if thread and body:
-            prefix = f"# **[ {'New PR comment' if is_pr else 'New issue comment'} from {author} ]({url})**\n"
-            await send_message(thread, body, prefix=prefix)
+        if not thread or not body:
+            return
+
+        contributor_role_id = await self.cog.config.contributor_role_id()
+        role = thread.guild.get_role(contributor_role_id) if contributor_role_id else None
+        role_mention = role.mention if role else ""
+
+        prefix = f"💬 **New {'PR' if is_pr else 'Issue'} comment** by **{author}** {role_mention} → [View Comment]({url})\n"
+        await send_message(thread, body, prefix=prefix)
 
     async def handle_pull_request_review(self, data, repo_full_name):
         if data.get("action") != "submitted":
@@ -355,12 +380,16 @@ class GitHubEventHandlers:
             if not thread:
                 return
 
+            contributor_role_id = await self.cog.config.contributor_role_id()
+            role = thread.guild.get_role(contributor_role_id) if contributor_role_id else None
+            role_mention = role.mention if role else ""
+
             if entry["body"]:
-                prefix = f"# **[ Review from {entry['author']} ]({entry['url']})**\n"
+                prefix = f"📝 **Review submitted** by **{entry['author']}** {role_mention} → [View Review]({entry['url']})\n"
                 await send_message(thread, entry["body"], prefix=prefix)
 
             for body, url in reversed(entry["comments"]):
-                prefix = f"# **[ New PR review comment from {entry['author']} ]({url})**\n"
+                prefix = f"💬 **PR review comment** by **{entry['author']}** {role_mention} → [View Comment]({url})\n"
                 await send_message(thread, body, prefix=prefix)
 
         if key in self.pending_reviews and "task" in self.pending_reviews[key]:
