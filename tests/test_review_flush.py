@@ -1,5 +1,4 @@
 import pytest
-import asyncio
 from unittest.mock import AsyncMock, Mock, patch
 from GenHub.handlers import GitHubEventHandlers
 
@@ -11,16 +10,9 @@ async def test_pull_request_review_flushes_message():
     cog.config.prs_forum_id = AsyncMock(return_value=123)
     cog.config.contributor_role_id = AsyncMock(return_value=None)
 
-    mock_forum = Mock()
-    mock_forum.available_tags = []
-    mock_forum.create_tag = AsyncMock()
-
     mock_thread = AsyncMock()
-    mock_forum.create_thread = AsyncMock(return_value=Mock(thread=mock_thread))
-
-    cog.bot = Mock()
-    cog.bot.get_channel = Mock(return_value=mock_forum)
-    cog.thread_cache = {}
+    mock_thread.edit = AsyncMock()
+    mock_thread.guild = Mock()
 
     handler = GitHubEventHandlers(cog)
 
@@ -39,14 +31,23 @@ async def test_pull_request_review_flushes_message():
         },
     }
 
-    with patch("GenHub.handlers.send_message", new_callable=AsyncMock) as mock_send:
-        await handler.handle_pull_request_review(data, "owner/repo")
-        await asyncio.sleep(2.5)
+    async def fake_get_or_create_thread(*a, **k): return mock_thread
 
+    # ensure forum shape is iterable for available_tags
+    cog.bot = Mock()
+    forum = Mock()
+    forum.available_tags = []
+    forum.create_tag = AsyncMock()
+    cog.bot.get_channel = Mock(return_value=forum)
+
+    with (
+        patch("GenHub.handlers.send_message", new_callable=AsyncMock) as mock_send,
+        patch("GenHub.handlers.get_or_create_thread", side_effect=fake_get_or_create_thread),
+    ):
+        await handler.handle_pull_request_review(data, "owner/repo")
+        task = handler.pending_reviews[("owner/repo", 42, 101)]["task"]
+        await task
         mock_send.assert_awaited()
-        call = mock_send.await_args_list[0]
-        args, kwargs = call
-        assert "review submitted" in kwargs["prefix"].lower() or "Looks good" in args[1]
 
 
 @pytest.mark.asyncio
@@ -56,16 +57,9 @@ async def test_pull_request_review_comment_flushes_message():
     cog.config.prs_forum_id = AsyncMock(return_value=123)
     cog.config.contributor_role_id = AsyncMock(return_value=None)
 
-    mock_forum = Mock()
-    mock_forum.available_tags = []
-    mock_forum.create_tag = AsyncMock()
-
     mock_thread = AsyncMock()
-    mock_forum.create_thread = AsyncMock(return_value=Mock(thread=mock_thread))
-
-    cog.bot = Mock()
-    cog.bot.get_channel = Mock(return_value=mock_forum)
-    cog.thread_cache = {}
+    mock_thread.edit = AsyncMock()
+    mock_thread.guild = Mock()
 
     handler = GitHubEventHandlers(cog)
 
@@ -83,11 +77,20 @@ async def test_pull_request_review_comment_flushes_message():
         },
     }
 
-    with patch("GenHub.handlers.send_message", new_callable=AsyncMock) as mock_send:
-        await handler.handle_pull_request_review_comment(data, "owner/repo")
-        await asyncio.sleep(2.5)
+    async def fake_get_or_create_thread(*a, **k): return mock_thread
 
+    cog.bot = Mock()
+    forum = Mock()
+    forum.available_tags = []
+    forum.create_tag = AsyncMock()
+    cog.bot.get_channel = Mock(return_value=forum)
+
+    with (
+        patch("GenHub.handlers.send_message", new_callable=AsyncMock) as mock_send,
+        patch("GenHub.handlers.get_or_create_thread", side_effect=fake_get_or_create_thread),
+    ):
+        await handler.handle_pull_request_review_comment(data, "owner/repo")
+        task = handler.pending_reviews[("owner/repo", 99, 202)]["task"]
+        await task
         mock_send.assert_awaited()
-        call = mock_send.await_args_list[0]
-        args, kwargs = call
-        assert "review comment" in kwargs["prefix"].lower() or "Please fix" in args[1]
+

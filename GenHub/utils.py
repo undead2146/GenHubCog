@@ -102,39 +102,14 @@ async def update_status_tag(thread, new_status_name):
     current_tags = [t for t in current_tags if t.name.lower() not in status_names]
     current_tags.append(new_status_tag)
     await thread.edit(applied_tags=current_tags)
-
-
-async def get_or_create_thread(bot, forum_id, repo_full_name, number, title, url, tags, thread_cache):
-    """Find or create a forum thread for an issue/PR."""
-    key = (forum_id, repo_full_name, number)
-    if key in thread_cache:
-        thread_id = thread_cache[key]
-        thread = bot.get_channel(thread_id)
-        if thread:
-            return thread
-
-    forum = bot.get_channel(forum_id)
-    if not forum:
-        return None
-
-    repo_tag = await get_or_create_tag(forum, repo_full_name.split("/")[-1])
-    if repo_tag and repo_tag not in tags:
-        tags.append(repo_tag)
-
-    thread_with_msg = await forum.create_thread(
-        name=f"「#{number}」{title}", content=f"[#{number}]({url})", applied_tags=tags
-    )
-    thread = thread_with_msg.thread
-    thread_cache[key] = thread.id
-    return thread
-
-
 async def find_thread(bot, forum_id, repo_full_name, topic_number, thread_cache):
     """Find an existing thread by repo + number."""
     key = (forum_id, repo_full_name, topic_number)
     if key in thread_cache:
-        thread_id = thread_cache[key]
-        thread = bot.get_channel(thread_id)
+        cached = thread_cache[key]
+        if hasattr(cached, "id"):
+            return cached
+        thread = bot.get_channel(cached)
         if thread:
             return thread
 
@@ -143,12 +118,59 @@ async def find_thread(bot, forum_id, repo_full_name, topic_number, thread_cache)
         return None
 
     repo_tag = await get_or_create_tag(forum, repo_full_name.split("/")[-1])
-    for thread in forum.threads:
+
+    for thread in getattr(forum, "threads", []):
         if f"「#{topic_number}」" in thread.name and repo_tag in thread.applied_tags:
-            thread_cache[key] = thread.id
+            thread_cache[key] = thread
             return thread
-    async for thread in forum.archived_threads(limit=None):
-        if f"「#{topic_number}」" in thread.name and repo_tag in thread.applied_tags:
-            thread_cache[key] = thread.id
-            return thread
+
+    if hasattr(forum, "archived_threads"):
+        async for thread in forum.archived_threads(limit=None):
+            if f"「#{topic_number}」" in thread.name and repo_tag in thread.applied_tags:
+                thread_cache[key] = thread
+                return thread
+
     return None
+
+
+from types import SimpleNamespace
+
+async def get_or_create_thread(
+    bot, forum_id, repo_full_name, number, title, url, tags, thread_cache
+):
+    key_str = (str(forum_id), repo_full_name, number)
+    key_int = (int(forum_id), repo_full_name, number)
+
+    # --- Cache lookup ---
+    for key in (key_str, key_int):
+        if key in thread_cache:
+            cached = thread_cache[key]
+            if cached is None:
+                continue
+            # unwrap if it's a wrapper
+            if hasattr(cached, "thread"):
+                return cached.thread
+            return cached
+
+    forum = bot.get_channel(forum_id)
+    if not forum:
+        return None
+
+    thread_with_msg = await forum.create_thread(
+        name=f"「#{number}」{title}",
+        content=f"[#{number}]({url})",
+        applied_tags=tags,
+    )
+
+    # unwrap if forum.create_thread returned a wrapper
+    if hasattr(thread_with_msg, "thread"):
+        thread = thread_with_msg.thread
+    else:
+        thread = thread_with_msg
+
+    # store the actual thread object in cache
+    thread_cache[key_str] = thread
+    thread_cache[key_int] = thread
+
+    # always return the actual thread object
+    return thread

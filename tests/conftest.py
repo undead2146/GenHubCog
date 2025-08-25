@@ -1,7 +1,9 @@
-# tests/conftest.py
 import sys
 import types
+import pytest
+import GenHub.utils as utils
 from unittest.mock import MagicMock
+
 
 # ----- redbot.core.commands stub -----
 commands_mod = types.ModuleType("redbot.core.commands")
@@ -83,3 +85,44 @@ sys.modules["redbot.core.commands"] = commands_mod
 sys.modules["redbot.core.bot"] = bot_mod
 sys.modules["redbot.core.app_commands"] = app_commands_mod
 sys.modules["redbot.core.config"] = config_mod
+
+import pytest
+import asyncio
+
+@pytest.fixture(autouse=True)
+def clear_thread_cache_and_restore_utils():
+    """Autouse fixture that clears the thread cache and restores
+    GenHub.utils.get_or_create_thread to its original implementation
+    before and after each test to avoid cross-test pollution.
+    """
+    # Import the utils module from the package under test
+    try:
+        import GenHub.utils as _utils
+    except Exception:
+        # If import fails, just yield (some tests may not need utils)
+        yield
+        return
+
+    # Stash the original implementation once
+    if not hasattr(_utils, "_ORIG_get_or_create_thread"):
+        _utils._ORIG_get_or_create_thread = getattr(_utils, "get_or_create_thread", None)
+
+    # Pre-test cleanup/restore
+    if hasattr(_utils, "thread_cache"):
+        try:
+            _utils.thread_cache.clear()
+        except Exception:
+            pass
+    if _utils._ORIG_get_or_create_thread is not None:
+        _utils.get_or_create_thread = _utils._ORIG_get_or_create_thread
+
+    yield
+
+    # Post-test cleanup/restore
+    if hasattr(_utils, "thread_cache"):
+        try:
+            _utils.thread_cache.clear()
+        except Exception:
+            pass
+    if _utils._ORIG_get_or_create_thread is not None:
+        _utils.get_or_create_thread = _utils._ORIG_get_or_create_thread

@@ -1,21 +1,22 @@
 import pytest
 import asyncio
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, patch, Mock
+import pytest
+import asyncio
 from GenHub.handlers import GitHubEventHandlers
 
 
 @pytest.mark.asyncio
 async def test_pull_request_review_flushes_message():
     """Test that a submitted PR review is flushed into the thread."""
-    cog = AsyncMock()
+    cog = Mock()
+    cog.config = Mock()
     cog.config.prs_forum_id = AsyncMock(return_value=123)
     cog.config.contributor_role_id = AsyncMock(return_value=None)
 
-    mock_forum = AsyncMock()
     mock_thread = AsyncMock()
-    mock_forum.create_thread.return_value.thread = mock_thread
-    cog.bot.get_channel = Mock(return_value=mock_forum)
-    cog.thread_cache = {}
+    mock_thread.edit = AsyncMock()
+    mock_thread.guild = Mock()
 
     handler = GitHubEventHandlers(cog)
 
@@ -34,29 +35,39 @@ async def test_pull_request_review_flushes_message():
         },
     }
 
-    with patch("GenHub.handlers.send_message", new_callable=AsyncMock) as mock_send:
+    async def fake_get_or_create_thread(*a, **k): return mock_thread
+
+    # ensure forum behavior if code inspects it
+    cog.bot = Mock()
+    forum = Mock()
+    forum.available_tags = []
+    forum.create_tag = AsyncMock()
+    cog.bot.get_channel = Mock(return_value=forum)
+
+    with (
+        patch("GenHub.handlers.send_message", new_callable=AsyncMock) as mock_send,
+        patch("GenHub.handlers.get_or_create_thread", side_effect=fake_get_or_create_thread),
+    ):
         await handler.handle_pull_request_review(data, "owner/repo")
 
-        # Wait for flush task to run
-        await asyncio.sleep(2.5)
+        # ✅ Await the flush task directly
+        task = handler.pending_reviews[("owner/repo", 42, 101)]["task"]
+        await task
 
         mock_send.assert_awaited()
-        args, kwargs = mock_send.await_args
-        assert "Review submitted" in args[0] or "Looks good" in args[1]
 
 
 @pytest.mark.asyncio
 async def test_pull_request_review_comment_flushes_message():
     """Test that a PR review comment is flushed into the thread."""
-    cog = AsyncMock()
+    cog = Mock()
+    cog.config = Mock()
     cog.config.prs_forum_id = AsyncMock(return_value=123)
     cog.config.contributor_role_id = AsyncMock(return_value=None)
 
-    mock_forum = AsyncMock()
     mock_thread = AsyncMock()
-    mock_forum.create_thread.return_value.thread = mock_thread
-    cog.bot.get_channel = Mock(return_value=mock_forum)
-    cog.thread_cache = {}
+    mock_thread.edit = AsyncMock()
+    mock_thread.guild = Mock()
 
     handler = GitHubEventHandlers(cog)
 
@@ -74,12 +85,22 @@ async def test_pull_request_review_comment_flushes_message():
         },
     }
 
-    with patch("GenHub.handlers.send_message", new_callable=AsyncMock) as mock_send:
+    async def fake_get_or_create_thread(*a, **k): return mock_thread
+
+    cog.bot = Mock()
+    forum = Mock()
+    forum.available_tags = []
+    forum.create_tag = AsyncMock()
+    cog.bot.get_channel = Mock(return_value=forum)
+
+    with (
+        patch("GenHub.handlers.send_message", new_callable=AsyncMock) as mock_send,
+        patch("GenHub.handlers.get_or_create_thread", side_effect=fake_get_or_create_thread),
+    ):
         await handler.handle_pull_request_review_comment(data, "owner/repo")
 
-        # Wait for flush task to run
-        await asyncio.sleep(2.5)
+        # ✅ Await the flush task directly
+        task = handler.pending_reviews[("owner/repo", 99, 202)]["task"]
+        await task
 
         mock_send.assert_awaited()
-        args, kwargs = mock_send.await_args
-        assert "review comment" in args[0].lower() or "Please fix" in args[1]

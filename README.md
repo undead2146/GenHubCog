@@ -14,14 +14,19 @@ This cog receives GitHub webhook events and routes them to the correct Discord f
 **Option 2: Install from GitHub Repo**
 
 1. Add the repo to Redbot:
+
    ```
    !repo add genhub https://github.com/undead2146/GenHubCog/
    ```
+
 2. Install the cog:
+
    ```
    !cog install genhub GenHub
    ```
+
 3. Load the cog:
+
    ```
    !load GenHub
    ```
@@ -118,11 +123,13 @@ GenHub/
 - **Installation:**  
   - Manual: Copy the `GenHub` directory to your Redbot `cogs` folder and load it.  
   - Or use the following commands to install from GitHub:
+
     ```
     !repo add genhub https://github.com/undead2146/GenHubCog/
     !cog install genhub GenHub
     !load GenHub
     ```
+
 - **Configuration:** Use text or slash commands to set up webhook, repositories, channels, and tags.
 - **Usage:** The cog listens for GitHub webhook events and routes them to Discord forums and feeds.
 - **Development:** Use the provided commands and project structure for local testing and development.
