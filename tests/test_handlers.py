@@ -19,13 +19,13 @@ async def test_handle_issue_opened_creates_message():
     mock_thread.applied_tags = []
 
     mock_forum = make_fake_forum_with_threads([mock_thread])
-    mock_forum.available_tags = []          # ✅ ensure list
-    mock_forum.create_tag = AsyncMock()     # ✅ ensure async
+    mock_forum.available_tags = []
+    mock_forum.create_tag = AsyncMock()
     mock_forum.create_thread = AsyncMock(return_value=Mock(thread=mock_thread))
 
     cog.bot = Mock()
     cog.bot.get_channel = Mock(return_value=mock_forum)
-    cog.bot.loop = asyncio.get_event_loop()   # ✅ real loop
+    cog.bot.loop = asyncio.get_event_loop()
     cog.thread_cache = {}
 
     handler = GitHubEventHandlers(cog)
@@ -68,13 +68,13 @@ async def test_handle_pr_closed_merged():
     mock_thread.applied_tags = []
 
     mock_forum = make_fake_forum_with_threads([mock_thread])
-    mock_forum.available_tags = []          # ✅ ensure list
-    mock_forum.create_tag = AsyncMock()     # ✅ ensure async
+    mock_forum.available_tags = []
+    mock_forum.create_tag = AsyncMock()
     mock_forum.create_thread = AsyncMock(return_value=Mock(thread=mock_thread))
 
     cog.bot = Mock()
     cog.bot.get_channel = Mock(return_value=mock_forum)
-    cog.bot.loop = asyncio.get_event_loop()   # ✅ real loop
+    cog.bot.loop = asyncio.get_event_loop()
     cog.thread_cache = {}
 
     handler = GitHubEventHandlers(cog)
@@ -252,6 +252,11 @@ async def test_handle_issue_no_thread_and_empty_body():
     forum.available_tags = []
     forum.create_tag = AsyncMock()
     forum.create_thread = AsyncMock()
+    forum.threads = []
+    async def fake_archived_threads(limit=None):
+        if False:
+            yield None
+    forum.archived_threads = fake_archived_threads
     cog.bot.get_channel = Mock(return_value=forum)
     cog.thread_cache = {}
     handler = GitHubEventHandlers(cog)
@@ -276,9 +281,14 @@ async def test_handle_issue_comment_empty_body_skips(monkeypatch):
     forum = Mock()
     forum.available_tags = []
     forum.create_tag = AsyncMock()
-    forum.create_thread = AsyncMock()   # <-- must be AsyncMock
+    forum.create_thread = AsyncMock()
+    forum.threads = []
+    async def fake_archived_threads(limit=None):
+        if False:
+            yield None
+    forum.archived_threads = fake_archived_threads
     cog.bot.get_channel = Mock(return_value=forum)
-    cog.thread_cache = {}               # <-- ensure dict
+    cog.thread_cache = {}
     handler = GitHubEventHandlers(cog)
 
     async def fake_get_or_create_thread(*a, **k):
@@ -287,7 +297,7 @@ async def test_handle_issue_comment_empty_body_skips(monkeypatch):
     monkeypatch.setattr(_utils, "get_or_create_thread", fake_get_or_create_thread)
 
     data = {"issue":{"number":1,"title":"t","html_url":"u","user":{"login":"a"}, "state":"open"}, "comment":{"body":"","user":{"login":"b"},"html_url":"c"}}
-    await handler.handle_issue_comment(data, "owner/repo")  # should skip
+    await handler.handle_issue_comment(data, "owner/repo")
 
 
 @pytest.mark.asyncio
@@ -345,7 +355,6 @@ async def test_schedule_flush_no_pr_data(monkeypatch):
 
     data = {"review": {"id": 1, "user": {"login": "a"}, "html_url": "u"}}
     key = ("owner/repo", 1, 1)
-    # Pre-populate pending_reviews with dummy entry so _schedule_flush can attach the task
     handler.pending_reviews[key] = {
         "author": "a",
         "url": "u",
@@ -353,7 +362,6 @@ async def test_schedule_flush_no_pr_data(monkeypatch):
         "comments": []
     }
     await handler._schedule_flush("owner/repo", 1, 1, data)
-    # Cancel the task immediately to avoid waiting 2s in the flush coroutine
     handler.pending_reviews[key]["task"].cancel()
 
 
@@ -377,7 +385,6 @@ async def test_reconcile_repo_filter_and_bad_status(monkeypatch):
     forum = Mock()
     forum.threads = [thread]
     async def fake_archived_threads(limit=None):
-        # make this an async generator (even if it yields nothing)
         if False:
             yield None
         return
@@ -401,4 +408,4 @@ async def test_reconcile_repo_filter_and_bad_status(monkeypatch):
     monkeypatch.setattr("GenHub.handlers.aiohttp.ClientSession", lambda: FakeSession())
 
     await handler.reconcile_forum_tags(repo_filter="different")
-    await handler.reconcile_forum_tags(repo_filter=None)  # triggers bad status path
+    await handler.reconcile_forum_tags(repo_filter=None)

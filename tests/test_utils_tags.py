@@ -130,6 +130,11 @@ async def test_get_or_create_thread_creates_and_caches():
     forum.create_thread = AsyncMock(return_value=SimpleNamespace(thread=fake_thread))
     forum.available_tags = []
     forum.create_tag = AsyncMock(return_value=SimpleNamespace(name="repo"))
+    forum.threads = []
+    async def fake_archived_threads(limit=None):
+        if False:
+            yield None
+    forum.archived_threads = fake_archived_threads
 
     bot.get_channel = Mock(return_value=forum)
 

@@ -1,8 +1,6 @@
 import pytest
 import asyncio
 from unittest.mock import AsyncMock, patch, Mock
-import pytest
-import asyncio
 from GenHub.handlers import GitHubEventHandlers
 
 
@@ -37,7 +35,6 @@ async def test_pull_request_review_flushes_message():
 
     async def fake_get_or_create_thread(*a, **k): return mock_thread
 
-    # ensure forum behavior if code inspects it
     cog.bot = Mock()
     forum = Mock()
     forum.available_tags = []
@@ -50,7 +47,6 @@ async def test_pull_request_review_flushes_message():
     ):
         await handler.handle_pull_request_review(data, "owner/repo")
 
-        # ✅ Await the flush task directly
         task = handler.pending_reviews[("owner/repo", 42, 101)]["task"]
         await task
 
@@ -99,7 +95,6 @@ async def test_pull_request_review_comment_flushes_message():
     ):
         await handler.handle_pull_request_review_comment(data, "owner/repo")
 
-        # ✅ Await the flush task directly
         task = handler.pending_reviews[("owner/repo", 99, 202)]["task"]
         await task
 

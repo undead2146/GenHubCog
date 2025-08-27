@@ -19,13 +19,13 @@ async def test_pull_request_review_flushes_message():
     mock_thread.applied_tags = []
 
     mock_forum = make_fake_forum_with_threads([mock_thread])
-    mock_forum.available_tags = []          # ✅ ensure list
-    mock_forum.create_tag = AsyncMock()     # ✅ ensure async
+    mock_forum.available_tags = []
+    mock_forum.create_tag = AsyncMock()
     mock_forum.create_thread = AsyncMock(return_value=Mock(thread=mock_thread))
 
     cog.bot = Mock()
     cog.bot.get_channel = Mock(return_value=mock_forum)
-    cog.bot.loop = asyncio.get_event_loop()   # ✅ real loop
+    cog.bot.loop = asyncio.get_event_loop()
     cog.thread_cache = {}
 
     handler = GitHubEventHandlers(cog)
@@ -77,13 +77,13 @@ async def test_pull_request_review_comment_flushes_message():
     mock_thread.applied_tags = []
 
     mock_forum = make_fake_forum_with_threads([mock_thread])
-    mock_forum.available_tags = []          # ✅ ensure list
-    mock_forum.create_tag = AsyncMock()     # ✅ ensure async
+    mock_forum.available_tags = []
+    mock_forum.create_tag = AsyncMock()
     mock_forum.create_thread = AsyncMock(return_value=Mock(thread=mock_thread))
 
     cog.bot = Mock()
     cog.bot.get_channel = Mock(return_value=mock_forum)
-    cog.bot.loop = asyncio.get_event_loop()   # ✅ real loop
+    cog.bot.loop = asyncio.get_event_loop()
     cog.thread_cache = {}
 
     handler = GitHubEventHandlers(cog)

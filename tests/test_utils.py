@@ -72,6 +72,7 @@ async def test_find_thread_archived_found():
     async def fake_archived_threads(limit=None):
         yield t
     forum.archived_threads = fake_archived_threads
+    forum.threads = []  # <-- Add this to make it iterable
     bot = Mock()
     bot.get_channel = Mock(return_value=forum)
     result = await utils.find_thread(bot, 1, "owner/repo", 1, {})

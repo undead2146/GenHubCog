@@ -33,7 +33,6 @@ async def test_pull_request_review_flushes_message():
 
     async def fake_get_or_create_thread(*a, **k): return mock_thread
 
-    # ensure forum shape is iterable for available_tags
     cog.bot = Mock()
     forum = Mock()
     forum.available_tags = []
