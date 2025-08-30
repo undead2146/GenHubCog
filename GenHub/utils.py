@@ -134,10 +134,11 @@ async def find_thread(bot, forum_id, repo_full_name, topic_number, thread_cache)
     if not forum:
         return None
 
-    # Try patterns: first with brackets, then without
+    # Try patterns: first with brackets, then with #, then just number
     patterns = [
         rf"「#{topic_number}」(?:\D|$)",
         rf"#{topic_number}(?:\D|$)",
+        rf"{topic_number}(?:\D|$)",
     ]
 
     for pattern in patterns:
@@ -174,11 +175,11 @@ async def get_or_create_thread(
     # First try to find an existing thread
     existing = await find_thread(bot, forum_id, repo_full_name, number, thread_cache)
     if existing:
-        # Update name if it doesn't have brackets
-        if hasattr(existing, 'name') and not existing.name.startswith(f"「#{number}」"):
-            new_name = f"「#{number}」{title}"
+        # Update name if it doesn't match the expected
+        expected_name = f"「#{number}」{title}"
+        if hasattr(existing, 'name') and existing.name != expected_name:
             try:
-                await existing.edit(name=new_name)
+                await existing.edit(name=expected_name)
             except Exception:
                 pass  # ignore if can't edit
         return existing, False
