@@ -46,7 +46,7 @@ async def test_pull_request_review_flushes_message():
     }
 
     async def fake_get_or_create_thread(*args, **kwargs):
-        return mock_thread
+        return mock_thread, False
 
     with patch("GenHub.handlers.send_message", new_callable=AsyncMock) as mock_send, \
          patch("GenHub.handlers.get_or_create_thread", side_effect=fake_get_or_create_thread):
@@ -103,7 +103,7 @@ async def test_pull_request_review_comment_flushes_message():
     }
 
     async def fake_get_or_create_thread(*args, **kwargs):
-        return mock_thread
+        return mock_thread, False
 
     with patch("GenHub.handlers.send_message", new_callable=AsyncMock) as mock_send, \
          patch("GenHub.handlers.get_or_create_thread", side_effect=fake_get_or_create_thread):

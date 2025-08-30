@@ -26,6 +26,7 @@ class GenHub(commands.Cog):
             "prs_feed_chat_id": None,
             "contributor_role_id": None,
             "github_token": "",
+            "thread_cache": {},
         }
         self.config.register_global(**default_global)
 
@@ -36,6 +37,9 @@ class GenHub(commands.Cog):
     async def cog_load(self):
         # Start webhook server
         self.task = asyncio.create_task(self.webhook.start())
+
+        # Load thread cache
+        self.thread_cache = await self.config.thread_cache()
 
         # Sync slash commands
         try:
@@ -56,5 +60,7 @@ class GenHub(commands.Cog):
 
     async def cog_unload(self):
         await self.webhook.stop()
+        # Save thread cache
+        await self.config.thread_cache.set(self.thread_cache)
         if hasattr(self, "task"):
             self.task.cancel()

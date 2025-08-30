@@ -107,12 +107,10 @@ async def update_status_tag(thread, new_status_name):
 
 async def find_thread(bot, forum_id, repo_full_name, topic_number, thread_cache):
     """Find an existing thread by repo + number."""
-    key = (forum_id, repo_full_name, topic_number)
-    if key in thread_cache:
-        cached = thread_cache[key]
-        if hasattr(cached, "id"):
-            return cached
-        thread = bot.get_channel(cached)
+    key_str = f"{forum_id}:{repo_full_name}:{topic_number}"
+    if key_str in thread_cache:
+        thread_id = thread_cache[key_str]
+        thread = bot.get_channel(int(thread_id))
         if thread:
             return thread
 
@@ -124,13 +122,13 @@ async def find_thread(bot, forum_id, repo_full_name, topic_number, thread_cache)
 
     for thread in getattr(forum, "threads", []):
         if re.match(pattern, thread.name):
-            thread_cache[key] = thread
+            thread_cache[key_str] = str(thread.id)
             return thread
 
     if hasattr(forum, "archived_threads"):
         async for thread in forum.archived_threads(limit=None):
             if re.match(pattern, thread.name):
-                thread_cache[key] = thread
+                thread_cache[key_str] = str(thread.id)
                 return thread
 
     return None
@@ -159,6 +157,6 @@ async def get_or_create_thread(
         return None, False
 
     thread = getattr(thread_with_msg, "thread", thread_with_msg)
-    thread_cache[(str(forum_id), repo_full_name, number)] = thread
-    thread_cache[(int(forum_id), repo_full_name, number)] = thread
+    key_str = f"{forum_id}:{repo_full_name}:{number}"
+    thread_cache[key_str] = str(thread.id)
     return thread, True
