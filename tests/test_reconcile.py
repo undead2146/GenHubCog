@@ -11,6 +11,7 @@ async def test_reconcile_forum_tags_updates_thread_tags():
     cog.config.issues_forum_id = AsyncMock(return_value=123)
     cog.config.prs_forum_id = AsyncMock(return_value=None)
     cog.config.github_token = AsyncMock(return_value="")
+    cog.config.allowed_repos = AsyncMock(return_value=["owner/repo"])
 
     from tests.utils import make_fake_forum_with_threads
 
@@ -34,6 +35,7 @@ async def test_reconcile_forum_tags_updates_thread_tags():
     cog.bot = Mock()
     cog.bot.get_channel = Mock(return_value=mock_forum)
     cog.bot.loop = asyncio.get_event_loop()
+    cog.thread_cache = {}
 
     handler = GitHubEventHandlers(cog)
 
@@ -51,7 +53,7 @@ async def test_reconcile_forum_tags_updates_thread_tags():
         return mock_thread
 
     with patch("GenHub.handlers.aiohttp.ClientSession",
-               return_value=make_fake_aiohttp_session(fake_issue_data)), \
+               return_value=make_fake_aiohttp_session([fake_issue_data])), \
          patch("GenHub.handlers.get_or_create_thread", side_effect=fake_get_or_create_thread):
         await handler.reconcile_forum_tags(ctx=None, repo_filter=None)
 
@@ -68,6 +70,7 @@ async def test_reconcile_forum_tags_exception(monkeypatch):
     cog.config.issues_forum_id = AsyncMock(return_value=1)
     cog.config.prs_forum_id = AsyncMock(return_value=None)
     cog.config.github_token = AsyncMock(return_value="")
+    cog.config.allowed_repos = AsyncMock(return_value=["owner/repo"])
     forum = Mock()
     forum.threads = [Mock(name="bad", history=lambda **k: (_ for _ in () ))]
     async def fake_archived_threads(limit=None):
@@ -76,14 +79,16 @@ async def test_reconcile_forum_tags_exception(monkeypatch):
     cog.bot = Mock()
     cog.bot.get_channel = Mock(return_value=forum)
     cog.bot.loop = asyncio.get_event_loop()
+    cog.thread_cache = {}
     handler = GitHubEventHandlers(cog)
 
     # Patch aiohttp.ClientSession to raise on get
     class FakeSession:
+        def __init__(self, *args, **kwargs): pass
         async def __aenter__(self): return self
         async def __aexit__(self,*a): return False
         def get(self,*a,**k):
             raise RuntimeError("fail")
-    monkeypatch.setattr("GenHub.handlers.aiohttp.ClientSession", lambda: FakeSession())
+    monkeypatch.setattr("GenHub.handlers.aiohttp.ClientSession", lambda *args, **kwargs: FakeSession())
 
     await handler.reconcile_forum_tags()

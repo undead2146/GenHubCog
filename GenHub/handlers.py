@@ -10,6 +10,7 @@ from .utils import (
     get_pr_tags,
     update_status_tag,
     get_or_create_thread,
+    get_or_create_tag,
 )
 
 GITHUB_ISSUE_RE = re.compile(
@@ -251,56 +252,111 @@ class GitHubEventHandlers:
     # Reconciliation
     # ---------------------------
 
+    async def _reconcile_item(self, session, forum, repo, item, is_pr, ctx, idx, repo_name):
+        number = item["number"]
+        title = item["title"]
+        url = item["html_url"]
+        author = item["user"]["login"] if item.get("user") else "Unknown"
+        forum_id = forum.id
+        key = (forum_id, repo, number)
+        was_in_cache = key in self.cog.thread_cache
+
+        tags = await (get_pr_tags(forum, item) if is_pr else get_issue_tags(forum, item))
+        repo_tag = await get_or_create_tag(forum, repo.split("/")[-1])
+        if repo_tag and repo_tag not in tags:
+            tags.append(repo_tag)
+
+        thread = await get_or_create_thread(self.cog.bot, forum_id, repo, number, title, url, tags, self.cog.thread_cache)
+        if not thread:
+            return
+
+        if not was_in_cache:
+            # newly created, send initial message
+            role_mention = await get_role_mention(thread.guild, await self.cog.config.contributor_role_id())
+            emoji = "🆕"
+            action = "PR created" if is_pr else "Issue created"
+            msg = format_message(emoji, action, title, url, author, role_mention)
+            await send_message(thread, msg)
+
+        # update tags anyway, in case they changed
+        current = set(t.name.lower() for t in thread.applied_tags or [])
+        desired = set(t.name.lower() for t in tags or [])
+        if current != desired:
+            await thread.edit(applied_tags=tags or [])
+
+        if ctx and idx % 50 == 0:
+            await ctx.send(f"Processed {idx} items for {repo_name} so far...")
+
     async def reconcile_forum_tags(self, ctx=None, repo_filter: str = None):
-        issues_forum_id = await self.cog.config.issues_forum_id()
-        prs_forum_id = await self.cog.config.prs_forum_id()
-        for forum_id, is_pr in [(issues_forum_id, False), (prs_forum_id, True)]:
-            forum = self.cog.bot.get_channel(forum_id)
-            if not forum:
-                continue
-            threads = list(forum.threads)
-            async for t in forum.archived_threads(limit=None):
-                threads.append(t)
-            total = len(threads)
-            if ctx:
-                await ctx.send(f"🔄 Reconciling **{total}** threads in forum: {forum.name}")
-            async with aiohttp.ClientSession() as session:
-                for idx, thread in enumerate(threads, start=1):
-                    try:
-                        first_msg = None
-                        async for msg in thread.history(limit=1, oldest_first=True):
-                            first_msg = msg
-                        if not first_msg:
-                            continue
-                        match = GITHUB_ISSUE_RE.search(first_msg.content)
-                        if not match:
-                            continue
-                        owner, repo, kind, number = match.groups()
-                        number = int(number)
-                        if repo_filter and repo_filter.lower() != repo.lower():
-                            continue
-                        if kind == "issues":
-                            url = f"https://api.github.com/repos/{owner}/{repo}/issues/{number}"
-                        else:
-                            url = f"https://api.github.com/repos/{owner}/{repo}/pulls/{number}"
-                        headers = {"Accept": "application/vnd.github+json"}
-                        token = await self.cog.config.github_token()
-                        if token:
-                            headers["Authorization"] = f"Bearer {token}"
-                        async with session.get(url, headers=headers) as resp:
+        allowed_repos = await self.cog.config.allowed_repos()
+        token = await self.cog.config.github_token()
+        headers = {"Accept": "application/vnd.github+json"}
+        if token:
+            headers["Authorization"] = f"Bearer {token}"
+
+        async with aiohttp.ClientSession(headers=headers) as session:
+            for repo in allowed_repos:
+                if repo_filter and repo != repo_filter:
+                    continue
+                repo_name = repo.split("/")[-1]
+                if ctx:
+                    await ctx.send(f"🔄 Reconciling repo: {repo}")
+
+                # Fetch issues
+                issues_forum_id = await self.cog.config.issues_forum_id()
+                forum = self.cog.bot.get_channel(issues_forum_id)
+                if forum:
+                    page = 1
+                    total_issues = 0
+                    while True:
+                        url = f"https://api.github.com/repos/{repo}/issues?state=all&per_page=100&page={page}"
+                        async with session.get(url) as resp:
                             if resp.status != 200:
-                                continue
+                                if ctx:
+                                    await ctx.send(f"⚠️ Failed to fetch issues for {repo}, status: {resp.status}")
+                                break
                             data = await resp.json()
-                        tags = await (get_issue_tags(forum, data) if kind == "issues" else get_pr_tags(forum, data))
-                        repo_tag = await self.cog.bot.loop.create_task(get_or_create_thread(self.cog.bot, forum_id, repo, number, "", "", [], self.cog.thread_cache))
-                        if repo_tag and repo_tag not in tags:
-                            tags.append(repo_tag)
-                        current = set(t.name.lower() for t in thread.applied_tags)
-                        desired = set(t.name.lower() for t in tags)
-                        if current != desired:
-                            await thread.edit(applied_tags=tags)
-                        if ctx and idx % 10 == 0:
-                            await ctx.send(f"[{idx}/{total}] Processed {thread.name}")
-                        await asyncio.sleep(1)
-                    except Exception as e:
-                        print(f"❌ Error reconciling {thread.name}: {e}")
+                            if not data:
+                                break
+                            for item in data:
+                                if item.get("pull_request"):
+                                    continue  # skip PRs
+                                total_issues += 1
+                                try:
+                                    await self._reconcile_item(session, forum, repo, item, False, ctx, total_issues, repo_name)
+                                except Exception as e:
+                                    print(f"❌ Error reconciling issue {item.get('number')}: {e}")
+                            page += 1
+                            await asyncio.sleep(1)  # rate limit
+                    if ctx:
+                        await ctx.send(f"✅ Processed {total_issues} issues for {repo}")
+
+                # Fetch PRs
+                prs_forum_id = await self.cog.config.prs_forum_id()
+                forum = self.cog.bot.get_channel(prs_forum_id)
+                if forum:
+                    page = 1
+                    total_prs = 0
+                    while True:
+                        url = f"https://api.github.com/repos/{repo}/pulls?state=all&per_page=100&page={page}"
+                        async with session.get(url) as resp:
+                            if resp.status != 200:
+                                if ctx:
+                                    await ctx.send(f"⚠️ Failed to fetch PRs for {repo}, status: {resp.status}")
+                                break
+                            data = await resp.json()
+                            if not data:
+                                break
+                            for item in data:
+                                total_prs += 1
+                                try:
+                                    await self._reconcile_item(session, forum, repo, item, True, ctx, total_prs, repo_name)
+                                except Exception as e:
+                                    print(f"❌ Error reconciling PR {item.get('number')}: {e}")
+                            page += 1
+                            await asyncio.sleep(1)
+                    if ctx:
+                        await ctx.send(f"✅ Processed {total_prs} PRs for {repo}")
+
+        if ctx:
+            await ctx.send("✅ Reconciliation complete.")

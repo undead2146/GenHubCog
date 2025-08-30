@@ -373,6 +373,7 @@ async def test_reconcile_repo_filter_and_bad_status(monkeypatch):
     cog.config.issues_forum_id = AsyncMock(return_value=1)
     cog.config.prs_forum_id = AsyncMock(return_value=None)
     cog.config.github_token = AsyncMock(return_value="")
+    cog.config.allowed_repos = AsyncMock(return_value=["owner/repo"])
 
     # Fake forum with one thread
     thread = AsyncMock()
@@ -392,6 +393,7 @@ async def test_reconcile_repo_filter_and_bad_status(monkeypatch):
     cog.bot = Mock()
     cog.bot.get_channel = Mock(return_value=forum)
     cog.bot.loop = asyncio.get_event_loop()
+    cog.thread_cache = {}
 
     handler = GitHubEventHandlers(cog)
 
@@ -402,10 +404,11 @@ async def test_reconcile_repo_filter_and_bad_status(monkeypatch):
         async def __aexit__(self,*a): return False
         async def json(self): return {}
     class FakeSession:
+        def __init__(self, *args, **kwargs): pass
         async def __aenter__(self): return self
         async def __aexit__(self,*a): return False
         def get(self,*a,**k): return FakeResp()
-    monkeypatch.setattr("GenHub.handlers.aiohttp.ClientSession", lambda: FakeSession())
+    monkeypatch.setattr("GenHub.handlers.aiohttp.ClientSession", lambda *args, **kwargs: FakeSession())
 
-    await handler.reconcile_forum_tags(repo_filter="different")
+    await handler.reconcile_forum_tags(repo_filter="owner/repo")
     await handler.reconcile_forum_tags(repo_filter=None)
