@@ -74,7 +74,7 @@ class GitHubEventHandlers:
         forum_id = await self.cog.config.issues_forum_id()
         forum = self.cog.bot.get_channel(forum_id)
         tags = await get_issue_tags(forum, issue)
-        thread = await get_or_create_thread(
+        thread, _ = await get_or_create_thread(
             self.cog.bot,
             forum_id,
             repo_full_name,
@@ -135,7 +135,7 @@ class GitHubEventHandlers:
         forum_id = await self.cog.config.prs_forum_id()
         forum = self.cog.bot.get_channel(forum_id)
         tags = await get_pr_tags(forum, pr)
-        thread = await get_or_create_thread(
+        thread, _ = await get_or_create_thread(
             self.cog.bot, forum_id, repo_full_name, number, title, url, tags, self.cog.thread_cache
         )
         if not thread:
@@ -172,7 +172,7 @@ class GitHubEventHandlers:
         forum_id = await (self.cog.config.prs_forum_id() if is_pr else self.cog.config.issues_forum_id())
         forum = self.cog.bot.get_channel(forum_id)
         tags = await (get_pr_tags(forum, issue) if is_pr else get_issue_tags(forum, issue))
-        thread = await get_or_create_thread(
+        thread, _ = await get_or_create_thread(
             self.cog.bot, forum_id, repo_full_name, number, issue["title"], issue["html_url"], tags, self.cog.thread_cache
         )
         if not thread or not body:
@@ -228,7 +228,7 @@ class GitHubEventHandlers:
                 return
 
             tags = await get_pr_tags(forum, pr_data)
-            thread = await get_or_create_thread(
+            thread, _ = await get_or_create_thread(
                 self.cog.bot, forum_id, repo_full_name, pr_number, pr_data["title"], pr_data["html_url"], tags, self.cog.thread_cache
             )
             if not thread:
@@ -258,19 +258,17 @@ class GitHubEventHandlers:
         url = item["html_url"]
         author = item["user"]["login"] if item.get("user") else "Unknown"
         forum_id = forum.id
-        key = (forum_id, repo, number)
-        was_in_cache = key in self.cog.thread_cache
 
         tags = await (get_pr_tags(forum, item) if is_pr else get_issue_tags(forum, item))
         repo_tag = await get_or_create_tag(forum, repo.split("/")[-1])
         if repo_tag and repo_tag not in tags:
             tags.append(repo_tag)
 
-        thread = await get_or_create_thread(self.cog.bot, forum_id, repo, number, title, url, tags, self.cog.thread_cache)
+        thread, created = await get_or_create_thread(self.cog.bot, forum_id, repo, number, title, url, tags, self.cog.thread_cache)
         if not thread:
             return
 
-        if not was_in_cache:
+        if created:
             # newly created, send initial message
             role_mention = await get_role_mention(thread.guild, await self.cog.config.contributor_role_id())
             emoji = "🆕"

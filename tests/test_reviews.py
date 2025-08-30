@@ -33,7 +33,7 @@ async def test_pull_request_review_flushes_message():
         },
     }
 
-    async def fake_get_or_create_thread(*a, **k): return mock_thread
+    async def fake_get_or_create_thread(*a, **k): return mock_thread, False
 
     cog.bot = Mock()
     forum = Mock()
@@ -81,7 +81,7 @@ async def test_pull_request_review_comment_flushes_message():
         },
     }
 
-    async def fake_get_or_create_thread(*a, **k): return mock_thread
+    async def fake_get_or_create_thread(*a, **k): return mock_thread, False
 
     cog.bot = Mock()
     forum = Mock()

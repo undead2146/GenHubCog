@@ -40,7 +40,7 @@ async def test_handle_issue_opened_creates_message():
     data = {"action": "opened", "issue": issue}
 
     async def fake_get_or_create_thread(*args, **kwargs):
-        return mock_thread
+        return mock_thread, False
 
     with patch("GenHub.handlers.send_message", new_callable=AsyncMock) as mock_send, \
          patch("GenHub.handlers.get_or_create_thread", side_effect=fake_get_or_create_thread):
@@ -90,7 +90,7 @@ async def test_handle_pr_closed_merged():
     data = {"action": "closed", "pull_request": pr}
 
     async def fake_get_or_create_thread(*args, **kwargs):
-        return mock_thread
+        return mock_thread, False
 
     with patch("GenHub.handlers.send_message", new_callable=AsyncMock) as mock_send, \
          patch("GenHub.handlers.get_or_create_thread", side_effect=fake_get_or_create_thread):
@@ -133,7 +133,7 @@ async def test_handle_issue_closed_and_reopened_and_assigned():
     cog.bot.get_channel = Mock(return_value=mock_forum)
 
     async def fake_get_or_create_thread(*a, **k):
-        return mock_thread
+        return mock_thread, False
 
     with patch("GenHub.handlers.get_or_create_thread", side_effect=fake_get_or_create_thread), \
          patch("GenHub.handlers.send_message", new_callable=AsyncMock) as mock_send, \
@@ -162,7 +162,7 @@ async def test_handle_pull_request_closed_not_merged_and_reopened():
     cog.bot.get_channel = Mock(return_value=mock_forum)
 
     async def fake_get_or_create_thread(*a, **k):
-        return mock_thread
+        return mock_thread, False
 
     with patch("GenHub.handlers.get_or_create_thread", side_effect=fake_get_or_create_thread), \
          patch("GenHub.handlers.send_message", new_callable=AsyncMock) as mock_send, \
@@ -191,7 +191,7 @@ async def test_handle_pr_closed_not_merged():
     cog.bot.get_channel = Mock(return_value=mock_forum)
 
     async def fake_get_or_create_thread(*a, **k):
-        return mock_thread
+        return mock_thread, False
     with patch("GenHub.handlers.get_or_create_thread", side_effect=fake_get_or_create_thread), \
          patch("GenHub.handlers.send_message", new_callable=AsyncMock) as mock_send, \
          patch("GenHub.handlers.update_status_tag", new_callable=AsyncMock):
@@ -263,7 +263,7 @@ async def test_handle_issue_no_thread_and_empty_body():
 
     # Patch get_or_create_thread to return None
     async def fake_get_or_create_thread(*a, **k):
-        return None
+        return None, False
     from GenHub import utils as _utils
     _utils.get_or_create_thread = fake_get_or_create_thread
 
@@ -292,7 +292,7 @@ async def test_handle_issue_comment_empty_body_skips(monkeypatch):
     handler = GitHubEventHandlers(cog)
 
     async def fake_get_or_create_thread(*a, **k):
-        return Mock()
+        return Mock(), False
     from GenHub import utils as _utils
     monkeypatch.setattr(_utils, "get_or_create_thread", fake_get_or_create_thread)
 
@@ -318,7 +318,7 @@ async def test_handle_issue_comment_sends_message():
     cog.thread_cache = {}
 
     async def fake_get_or_create_thread(*a, **k):
-        return mock_thread
+        return mock_thread, False
     with patch("GenHub.handlers.get_or_create_thread", side_effect=fake_get_or_create_thread), \
          patch("GenHub.handlers.send_message", new_callable=AsyncMock) as mock_send:
         handler = GitHubEventHandlers(cog)

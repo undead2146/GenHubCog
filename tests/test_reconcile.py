@@ -50,7 +50,7 @@ async def test_reconcile_forum_tags_updates_thread_tags():
     from tests.utils import make_fake_aiohttp_session
 
     async def fake_get_or_create_thread(*args, **kwargs):
-        return mock_thread
+        return mock_thread, False
 
     with patch("GenHub.handlers.aiohttp.ClientSession",
                return_value=make_fake_aiohttp_session([fake_issue_data])), \

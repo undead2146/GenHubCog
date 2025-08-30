@@ -102,7 +102,7 @@ async def test_utils_get_or_create_thread_forum_none():
     bot = Mock()
     bot.get_channel = Mock(return_value=None)
     res = await utils.get_or_create_thread(bot, 1, "owner/repo", 1, "t", "u", [], {})
-    assert res is None
+    assert res == (None, False)
 
 
 @pytest.mark.asyncio

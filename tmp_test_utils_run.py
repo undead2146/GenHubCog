@@ -24,7 +24,8 @@ async def main():
     print('--- Scenario 1 ---')
     print('res is None?', res is None)
     print('res repr:', repr(res))
-    print('res id:', getattr(res, 'id', None))
+    print('res id:', getattr(res[0], 'id', None) if res and len(res) > 0 else None)
+    print('created:', res[1] if res and len(res) > 1 else None)
     print('cache contains key:', (1, 'owner/repo', 7) in thread_cache)
 
     # Second scenario: cached thread object
@@ -46,9 +47,10 @@ async def main():
         bot, 1, "owner/repo", 7, "T", "U", [], thread_cache2
     )
     print('--- Scenario 2 ---')
-    print('res2 is fake_thread2?', res2 is fake_thread2)
+    print('res2 is fake_thread2?', res2[0] is fake_thread2 if res2 and len(res2) > 0 else False)
     print('res2 repr:', repr(res2))
-    print('res2 id:', getattr(res2, 'id', None))
+    print('res2 id:', getattr(res2[0], 'id', None) if res2 and len(res2) > 0 else None)
+    print('created:', res2[1] if res2 and len(res2) > 1 else None)
 
 if __name__ == '__main__':
     asyncio.run(main())

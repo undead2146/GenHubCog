@@ -1,4 +1,5 @@
 import discord
+import re
 
 async def send_message(channel, content: str, prefix: str = ""):
     """Send a message, splitting into chunks if >2000 chars (including prefix)."""
@@ -119,16 +120,16 @@ async def find_thread(bot, forum_id, repo_full_name, topic_number, thread_cache)
     if not forum:
         return None
 
-    repo_tag = await get_or_create_tag(forum, repo_full_name.split("/")[-1])
+    pattern = rf"「#{topic_number}」(?:\D|$)"
 
     for thread in getattr(forum, "threads", []):
-        if f"「#{topic_number}」" in thread.name and repo_tag in thread.applied_tags:
+        if re.match(pattern, thread.name):
             thread_cache[key] = thread
             return thread
 
     if hasattr(forum, "archived_threads"):
         async for thread in forum.archived_threads(limit=None):
-            if f"「#{topic_number}」" in thread.name and repo_tag in thread.applied_tags:
+            if re.match(pattern, thread.name):
                 thread_cache[key] = thread
                 return thread
 
@@ -141,11 +142,11 @@ async def get_or_create_thread(
     # First try to find an existing thread
     existing = await find_thread(bot, forum_id, repo_full_name, number, thread_cache)
     if existing:
-        return existing
+        return existing, False
 
     forum = bot.get_channel(forum_id)
     if not forum:
-        return None
+        return None, False
 
     try:
         thread_with_msg = await forum.create_thread(
@@ -155,9 +156,9 @@ async def get_or_create_thread(
         )
     except discord.Forbidden:
         print(f"⚠️ Missing permissions to create thread in {forum.name}")
-        return None
+        return None, False
 
     thread = getattr(thread_with_msg, "thread", thread_with_msg)
     thread_cache[(str(forum_id), repo_full_name, number)] = thread
     thread_cache[(int(forum_id), repo_full_name, number)] = thread
-    return thread
+    return thread, True

@@ -117,7 +117,7 @@ async def test_get_or_create_thread_creates_and_caches():
         bot, 1, "owner/repo", 7, "Title", "url", [], thread_cache
     )
 
-    assert res is fake_thread
+    assert res == (fake_thread, True)
     assert (1, "owner/repo", 7) in thread_cache
 
 @pytest.mark.asyncio
@@ -144,8 +144,9 @@ async def test_get_or_create_thread_creates_and_caches():
     )
 
     # unwrap if needed
-    res_unwrapped = getattr(res, "thread", res)
+    res_unwrapped, created = res
     assert res_unwrapped is fake_thread
+    assert created is True
     assert (forum.id, "owner/repo", 7) in thread_cache
 
 
@@ -170,6 +171,7 @@ async def test_get_or_create_thread_uses_cache():
         bot, forum.id, "owner/repo", 7, "T", "U", [], thread_cache
     )
 
-    res_unwrapped = getattr(res, "thread", res)
+    res_unwrapped, created = res
     assert res_unwrapped is fake_thread
+    assert created is False
     assert res_unwrapped.id == 999
