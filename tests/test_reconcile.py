@@ -92,3 +92,63 @@ async def test_reconcile_forum_tags_exception(monkeypatch):
     monkeypatch.setattr("GenHub.handlers.aiohttp.ClientSession", lambda *args, **kwargs: FakeSession())
 
     await handler.reconcile_forum_tags()
+
+
+@pytest.mark.asyncio
+async def test_reconcile_creates_missing_thread():
+    """Test that reconciliation creates a thread for missing issues and sends initial message."""
+    cog = Mock()
+    cog.config = Mock()
+    cog.config.issues_forum_id = AsyncMock(return_value=123)
+    cog.config.prs_forum_id = AsyncMock(return_value=None)
+    cog.config.github_token = AsyncMock(return_value="")
+    cog.config.allowed_repos = AsyncMock(return_value=["owner/repo"])
+    cog.config.contributor_role_id = AsyncMock(return_value=None)
+
+    from tests.utils import make_fake_forum_with_threads
+
+    mock_thread = AsyncMock()
+    mock_thread.name = "「#1」Test Issue"
+    mock_thread.applied_tags = []
+    mock_thread.edit = AsyncMock()
+    mock_thread.guild = Mock()
+
+    mock_forum = make_fake_forum_with_threads([], name="Issues Forum")  # Empty threads
+    mock_forum.available_tags = []
+    from types import SimpleNamespace
+    mock_forum.create_tag = AsyncMock(side_effect=lambda name, moderated=False: SimpleNamespace(name=name))
+
+    cog.bot = Mock()
+    cog.bot.get_channel = Mock(return_value=mock_forum)
+    cog.bot.loop = asyncio.get_event_loop()
+    cog.thread_cache = {}
+
+    handler = GitHubEventHandlers(cog)
+
+    fake_issue_data = {
+        "number": 1,
+        "title": "Test Issue",
+        "html_url": "http://url/issue/1",
+        "state": "open",
+        "user": {"login": "tester"},
+    }
+
+    from tests.utils import make_fake_aiohttp_session
+
+    async def fake_get_or_create_thread(*args, **kwargs):
+        return mock_thread, True  # Thread was created
+
+    with patch("GenHub.handlers.aiohttp.ClientSession",
+               return_value=make_fake_aiohttp_session([fake_issue_data])), \
+         patch("GenHub.handlers.get_or_create_thread", side_effect=fake_get_or_create_thread), \
+         patch("GenHub.handlers.send_message", new_callable=AsyncMock) as mock_send:
+        await handler.reconcile_forum_tags(ctx=None, repo_filter=None)
+
+    # Assert that send_message was called for the initial message
+    mock_send.assert_awaited_once()
+    args, kwargs = mock_send.await_args
+    thread_arg, message = args
+    assert thread_arg == mock_thread
+    assert "🆕 Issue created" in message
+    assert "Test Issue" in message
+    assert "tester" in message

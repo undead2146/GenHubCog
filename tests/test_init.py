@@ -32,6 +32,9 @@ async def test_cog_load_and_unload(monkeypatch):
     monkeypatch.setattr("GenHub.genhub.WebhookServer.stop", AsyncMock(return_value=None))
 
     cog = GenHub(bot)
+    # Mock config methods
+    cog.config.thread_cache = AsyncMock(return_value={})
+    cog.config.thread_cache.set = AsyncMock()
     await cog.cog_load()
     bot.add_cog.assert_awaited()
     bot.tree.add_command.assert_called()
@@ -53,6 +56,9 @@ async def test_cog_load_sync_failure(capsys):
     bot.tree.add_command = Mock()
 
     cog = GenHub(bot)
+    # Mock config methods
+    cog.config.thread_cache = AsyncMock(return_value={})
+    cog.config.thread_cache.set = AsyncMock()
     await cog.cog_load()
     out = capsys.readouterr().out
     assert "Failed to sync slash commands" in out

@@ -259,26 +259,32 @@ class GitHubEventHandlers:
         author = item["user"]["login"] if item.get("user") else "Unknown"
         forum_id = forum.id
 
+        # Always compute desired tags
         tags = await (get_pr_tags(forum, item) if is_pr else get_issue_tags(forum, item))
         repo_tag = await get_or_create_tag(forum, repo.split("/")[-1])
         if repo_tag and repo_tag not in tags:
             tags.append(repo_tag)
 
-        thread, created = await get_or_create_thread(self.cog.bot, forum_id, repo, number, title, url, tags, self.cog.thread_cache)
+        # Ensure thread exists (create if missing)
+        thread, created = await get_or_create_thread(
+            self.cog.bot, forum_id, repo, number, title, url, tags, self.cog.thread_cache
+        )
         if not thread:
             return
 
         if created:
-            # newly created, send initial message
-            role_mention = await get_role_mention(thread.guild, await self.cog.config.contributor_role_id())
+            # Newly created → send initial message
+            role_mention = await get_role_mention(
+                thread.guild, await self.cog.config.contributor_role_id()
+            )
             emoji = "🆕"
             action = "PR created" if is_pr else "Issue created"
             msg = format_message(emoji, action, title, url, author, role_mention)
             await send_message(thread, msg)
 
-        # update tags anyway, in case they changed
-        current = set(t.name.lower() for t in thread.applied_tags or [])
-        desired = set(t.name.lower() for t in tags or [])
+        # Always reconcile tags (update if changed)
+        current = set(t.name.lower() for t in (thread.applied_tags or []))
+        desired = set(t.name.lower() for t in (tags or []))
         if current != desired:
             await thread.edit(applied_tags=tags or [])
 
