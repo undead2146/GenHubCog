@@ -109,8 +109,7 @@ async def update_status_tag(thread, new_status_name):
 
 async def find_thread(bot, forum_id, repo_full_name, topic_number, thread_cache):
     """Find an existing thread by repo + number."""
-    # Support both tuple and legacy string keys, and values that are either
-    # thread objects or string IDs.
+    # First check cache for a valid thread
     keys_to_try = [
         (forum_id, repo_full_name, topic_number),
         (str(forum_id), repo_full_name, topic_number),
@@ -119,34 +118,17 @@ async def find_thread(bot, forum_id, repo_full_name, topic_number, thread_cache)
     for k in keys_to_try:
         if k in thread_cache:
             cached = thread_cache[k]
-            # If we stored a thread object, verify it still exists
+            # If we stored a thread object, do a quick validation
             if hasattr(cached, "id"):
-                # Check if the cached thread still exists by trying to access its parent
-                # If the thread was deleted, accessing certain properties might fail
                 try:
-                    # Quick validation - if we can get the parent forum, thread likely exists
-                    if hasattr(cached, 'parent') and cached.parent:
-                        # Additional check: try to access a property that would fail if deleted
-                        if hasattr(cached, 'name'):
-                            _ = cached.name  # This should fail if the thread is deleted
-                        return cached
-                    elif not hasattr(cached, 'parent'):
-                        # Test/mock object without parent, assume it's valid
-                        return cached
-                    else:
-                        # Thread appears to be invalid, remove from cache
-                        del thread_cache[k]
+                    # Quick validation - try to access a property that would fail if deleted
+                    if hasattr(cached, 'name'):
+                        _ = cached.name  # This should fail if the thread is deleted
+                    return cached
                 except (AttributeError, discord.NotFound, discord.Forbidden):
                     # Thread is invalid/stale/deleted, remove from cache
                     del thread_cache[k]
                     continue
-            # Otherwise, assume it's an ID string
-            try:
-                thread = bot.get_channel(int(cached))
-                if thread:
-                    return thread
-            except Exception:
-                pass
 
     forum = bot.get_channel(forum_id)
     if not forum:
@@ -209,41 +191,11 @@ async def get_or_create_thread(
     # First try to find an existing thread
     existing = await find_thread(bot, forum_id, repo_full_name, number, thread_cache)
     if existing:
-        # Validate that the thread is still accessible and not archived
-        try:
-            if hasattr(existing, 'name'):
-                _ = existing.name  # Quick validation
-            # Check if thread is archived - if so, recreate as active for reconcile
-            if hasattr(existing, 'archived') and existing.archived:
-                print(f"ℹ️ Found archived thread #{number}, recreating as active")
-                # Remove from cache and treat as not found to force recreation
-                keys_to_remove = [
-                    (forum_id, repo_full_name, number),
-                    (str(forum_id), repo_full_name, number),
-                    f"{forum_id}:{repo_full_name}:{number}",
-                ]
-                for key in keys_to_remove:
-                    thread_cache.pop(key, None)
-                existing = None  # Force recreation
-            else:
-                # Update name if it doesn't match the expected
-                expected_name = f"「#{number}」{title}"
-                if hasattr(existing, 'name') and existing.name != expected_name:
-                    try:
-                        await existing.edit(name=expected_name)
-                    except (discord.Forbidden, discord.NotFound):
-                        # If we can't edit, the thread might be deleted or we lack permissions
-                        # Remove from cache and treat as not found
-                        keys_to_remove = [
-                            (forum_id, repo_full_name, number),
-                            (str(forum_id), repo_full_name, number),
-                            f"{forum_id}:{repo_full_name}:{number}",
-                        ]
-                        for key in keys_to_remove:
-                            thread_cache.pop(key, None)
-                        existing = None  # Force recreation
-        except (discord.NotFound, discord.Forbidden, AttributeError):
-            # Thread is deleted or inaccessible, remove from cache
+        print(f"📝 Found existing thread #{number} for {repo_full_name}")
+        # Check if thread is archived - if so, recreate as active for reconcile
+        if hasattr(existing, 'archived') and existing.archived:
+            print(f"ℹ️ Found archived thread #{number}, recreating as active")
+            # Remove from cache and treat as not found to force recreation
             keys_to_remove = [
                 (forum_id, repo_full_name, number),
                 (str(forum_id), repo_full_name, number),
@@ -252,18 +204,39 @@ async def get_or_create_thread(
             for key in keys_to_remove:
                 thread_cache.pop(key, None)
             existing = None  # Force recreation
+        else:
+            # Update name if it doesn't match the expected
+            expected_name = f"「#{number}」{title}"
+            if hasattr(existing, 'name') and existing.name != expected_name:
+                try:
+                    await existing.edit(name=expected_name)
+                    print(f"📝 Updated thread name for #{number}")
+                except (discord.Forbidden, discord.NotFound):
+                    # If we can't edit, the thread might be deleted or we lack permissions
+                    print(f"⚠️ Could not update thread name for #{number}, recreating")
+                    # Remove from cache and treat as not found
+                    keys_to_remove = [
+                        (forum_id, repo_full_name, number),
+                        (str(forum_id), repo_full_name, number),
+                        f"{forum_id}:{repo_full_name}:{number}",
+                    ]
+                    for key in keys_to_remove:
+                        thread_cache.pop(key, None)
+                    existing = None  # Force recreation
 
     if existing:
         return existing, False
 
     forum = bot.get_channel(forum_id)
     if not forum:
+        print(f"⚠️ Could not find forum {forum_id}")
         return None, False
 
+    print(f"🔄 Creating new thread for {repo_full_name}#{number}")
     try:
         thread_with_msg = await forum.create_thread(
             name=f"「#{number}」{title}",
-            content="",  # Empty content, let reconcile send the proper message
+            content=f"Creating thread for {repo_full_name}#{number}...",  # Placeholder content required by Discord
             applied_tags=tags,
         )
         print(f"✅ Created new thread for {repo_full_name}#{number}")
