@@ -55,8 +55,13 @@ def make_fake_aiohttp_session(fake_json_data, status: int = 200):
         # return FakeResponse directly (supports 'async with session.get(...) as resp')
         def get(self, url, headers=None):
             self.calls += 1
-            if self.calls > 1:
-                return FakeResponse([], status)  
-            return FakeResponse(fake_json_data, status)
+            # Repository existence check - always return success
+            if "/repos/" in url and not "/issues" in url and not "/pulls" in url:
+                return FakeResponse({"id": 123, "name": "test-repo"}, 200)
+            # Issues or PRs API - return fake data on first call, empty on subsequent
+            elif self.calls == 2:  # First API call (issues or PRs)
+                return FakeResponse(fake_json_data, status)
+            else:  # Subsequent calls (pagination)
+                return FakeResponse([], status)
 
     return FakeSession()

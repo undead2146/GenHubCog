@@ -321,6 +321,34 @@ class GitHubEventHandlers:
                 if ctx:
                     await ctx.send(f"🔄 Reconciling repo: {repo}")
 
+                # Check if repository exists first
+                repo_check_url = f"https://api.github.com/repos/{repo}"
+                print(f"🔍 Checking if repository {repo} exists...")
+                try:
+                    async with session.get(repo_check_url) as resp:
+                        if resp.status == 404:
+                            print(f"❌ Repository '{repo}' does not exist")
+                            if ctx:
+                                await ctx.send(f"❌ Repository '{repo}' does not exist. Please check the repository name.")
+                            continue  # Skip to next repo
+                        elif resp.status == 403:
+                            print(f"🚫 Cannot access repository '{repo}' (private or no permission)")
+                            if ctx:
+                                await ctx.send(f"🚫 Cannot access '{repo}'. Repository may be private or token lacks permission.")
+                            continue  # Skip to next repo
+                        elif resp.status != 200:
+                            print(f"⚠️ Unexpected response {resp.status} when checking repository {repo}")
+                            if ctx:
+                                await ctx.send(f"⚠️ Cannot verify repository '{repo}' (status: {resp.status})")
+                            continue  # Skip to next repo
+                        else:
+                            print(f"✅ Repository {repo} exists and is accessible")
+                except Exception as e:
+                    print(f"❌ Error checking repository {repo}: {e}")
+                    if ctx:
+                        await ctx.send(f"❌ Error checking repository '{repo}': {e}")
+                    continue  # Skip to next repo
+
                 # Fetch issues
                 issues_forum_id = await self.cog.config.issues_forum_id()
                 print(f"📋 Issues forum ID: {issues_forum_id}")
@@ -337,7 +365,23 @@ class GitHubEventHandlers:
                         try:
                             async with session.get(url) as resp:
                                 print(f"📡 Issues API response: {resp.status}")
-                                if resp.status != 200:
+                                if resp.status == 404:
+                                    print(f"❌ Repository '{repo}' not found (404)")
+                                    print(f"ℹ️  Please verify the repository name and ensure it exists")
+                                    if ctx:
+                                        await ctx.send(f"❌ Repository '{repo}' not found. Please check the repository name.")
+                                    break
+                                elif resp.status == 403:
+                                    print(f"🚫 Access forbidden to '{repo}' (403)")
+                                    print(f"ℹ️  Token may not have permission or repository may be private")
+                                    if ctx:
+                                        await ctx.send(f"🚫 Cannot access '{repo}'. Check token permissions.")
+                                    break
+                                elif resp.status != 200:
+                                    print(f"⚠️ Unexpected response {resp.status} for {repo}")
+                                    if ctx:
+                                        await ctx.send(f"⚠️ Failed to fetch issues for '{repo}' (status: {resp.status})")
+                                    break
                                     if ctx:
                                         if resp.status == 404:
                                             await ctx.send(
@@ -360,6 +404,12 @@ class GitHubEventHandlers:
                                     break
                                 data = await resp.json()
                                 print(f"📦 Issues data received: {len(data)} items")
+                                if len(data) == 0:
+                                    print(f"ℹ️  No issues found for {repo}. This could mean:")
+                                    print(f"   - Repository has no issues")
+                                    print(f"   - Repository doesn't exist")
+                                    print(f"   - Token lacks permission to view issues")
+                                    print(f"   - Repository is private and token has no access")
                         except Exception as e:
                             # Swallow exceptions so reconcile continues/returns gracefully
                             print(
@@ -412,7 +462,23 @@ class GitHubEventHandlers:
                         try:
                             async with session.get(url) as resp:
                                 print(f"📡 PRs API response: {resp.status}")
-                                if resp.status != 200:
+                                if resp.status == 404:
+                                    print(f"❌ Repository '{repo}' not found (404)")
+                                    print(f"ℹ️  Please verify the repository name and ensure it exists")
+                                    if ctx:
+                                        await ctx.send(f"❌ Repository '{repo}' not found. Please check the repository name.")
+                                    break
+                                elif resp.status == 403:
+                                    print(f"🚫 Access forbidden to '{repo}' (403)")
+                                    print(f"ℹ️  Token may not have permission or repository may be private")
+                                    if ctx:
+                                        await ctx.send(f"🚫 Cannot access '{repo}'. Check token permissions.")
+                                    break
+                                elif resp.status != 200:
+                                    print(f"⚠️ Unexpected response {resp.status} for {repo}")
+                                    if ctx:
+                                        await ctx.send(f"⚠️ Failed to fetch PRs for '{repo}' (status: {resp.status})")
+                                    break
                                     if ctx:
                                         if resp.status == 404:
                                             await ctx.send(
@@ -435,6 +501,12 @@ class GitHubEventHandlers:
                                     break
                                 data = await resp.json()
                                 print(f"📦 PRs data received: {len(data)} items")
+                                if len(data) == 0:
+                                    print(f"ℹ️  No PRs found for {repo}. This could mean:")
+                                    print(f"   - Repository has no pull requests")
+                                    print(f"   - Repository doesn't exist")
+                                    print(f"   - Token lacks permission to view PRs")
+                                    print(f"   - Repository is private and token has no access")
                         except Exception as e:
                             print(
                                 f"⚠️ Failed to fetch PRs for {repo}: {e}"
@@ -451,9 +523,7 @@ class GitHubEventHandlers:
                         if not data:
                             break
                         for item in data:
-                            if not item.get("pull_request"):
-                                print(f"⏭️ Skipping issue in PRs: {item['number']}")
-                                continue  # skip issues
+                            # In PRs endpoint, all items are PRs by definition, no filtering needed
                             total_prs += 1
                             print(f"🔄 Processing PR {item['number']}: {item['title'][:50]}...")
                             try:
