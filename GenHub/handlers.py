@@ -299,9 +299,15 @@ class GitHubEventHandlers:
             headers["Authorization"] = f"Bearer {token}"
 
         async with aiohttp.ClientSession(headers=headers) as session:
+            processed_repos = set()
             for repo in allowed_repos:
                 if repo_filter and repo != repo_filter:
                     continue
+                # Normalize repo name
+                repo = repo.strip().lstrip("/")
+                if repo in processed_repos:
+                    continue
+                processed_repos.add(repo)
                 repo_name = repo.split("/")[-1]
                 if ctx:
                     await ctx.send(f"🔄 Reconciling repo: {repo}")
@@ -309,6 +315,7 @@ class GitHubEventHandlers:
                 # Fetch issues
                 issues_forum_id = await self.cog.config.issues_forum_id()
                 forum = self.cog.bot.get_channel(issues_forum_id)
+                issues_failed = False
                 if forum:
                     page = 1
                     max_pages = 50
@@ -319,10 +326,24 @@ class GitHubEventHandlers:
                             async with session.get(url) as resp:
                                 if resp.status != 200:
                                     if ctx:
-                                        await ctx.send(
-                                            f"⚠️ Failed to fetch issues for {repo}, "
-                                            f"status: {resp.status}"
-                                        )
+                                        if resp.status == 404:
+                                            await ctx.send(
+                                                f"❌ Failed to fetch issues for {repo}, status: 404 (repo not found). Removing from allowed repos."
+                                            )
+                                            async with self.cog.config.allowed_repos() as repos:
+                                                if repo in repos:
+                                                    repos.remove(repo)
+                                            issues_failed = True
+                                        elif resp.status == 403:
+                                            await ctx.send(
+                                                f"⚠️ Failed to fetch issues for {repo}, status: 403 (forbidden). Check token or permissions."
+                                            )
+                                            issues_failed = True
+                                        else:
+                                            await ctx.send(
+                                                f"⚠️ Failed to fetch issues for {repo}, status: {resp.status}"
+                                            )
+                                            issues_failed = True
                                     break
                                 data = await resp.json()
                         except Exception as e:
@@ -337,6 +358,7 @@ class GitHubEventHandlers:
                                     )
                                 except Exception:
                                     pass
+                            issues_failed = True
                             break
                         if not data:
                             break
@@ -350,12 +372,13 @@ class GitHubEventHandlers:
                                 print(f"❌ Error reconciling issue {item.get('number')}: {e}")
                         page += 1
                         await asyncio.sleep(1)  # rate limit
-                    if ctx:
+                    if not issues_failed and ctx:
                         await ctx.send(f"✅ Processed {total_issues} issues for {repo}")
 
                 # Fetch PRs
                 prs_forum_id = await self.cog.config.prs_forum_id()
                 forum = self.cog.bot.get_channel(prs_forum_id)
+                prs_failed = False
                 if forum:
                     page = 1
                     max_pages = 50 
@@ -366,10 +389,24 @@ class GitHubEventHandlers:
                             async with session.get(url) as resp:
                                 if resp.status != 200:
                                     if ctx:
-                                        await ctx.send(
-                                            f"⚠️ Failed to fetch PRs for {repo}, "
-                                            f"status: {resp.status}"
-                                        )
+                                        if resp.status == 404:
+                                            await ctx.send(
+                                                f"❌ Failed to fetch PRs for {repo}, status: 404 (repo not found). Removing from allowed repos."
+                                            )
+                                            async with self.cog.config.allowed_repos() as repos:
+                                                if repo in repos:
+                                                    repos.remove(repo)
+                                            prs_failed = True
+                                        elif resp.status == 403:
+                                            await ctx.send(
+                                                f"⚠️ Failed to fetch PRs for {repo}, status: 403 (forbidden). Check token or permissions."
+                                            )
+                                            prs_failed = True
+                                        else:
+                                            await ctx.send(
+                                                f"⚠️ Failed to fetch PRs for {repo}, status: {resp.status}"
+                                            )
+                                            prs_failed = True
                                     break
                                 data = await resp.json()
                         except Exception as e:
@@ -383,6 +420,7 @@ class GitHubEventHandlers:
                                     )
                                 except Exception:
                                     pass
+                            prs_failed = True
                             break
                         if not data:
                             break
@@ -394,7 +432,7 @@ class GitHubEventHandlers:
                                 print(f"❌ Error reconciling PR {item.get('number')}: {e}")
                         page += 1
                         await asyncio.sleep(1)
-                    if ctx:
+                    if not prs_failed and ctx:
                         await ctx.send(f"✅ Processed {total_prs} PRs for {repo}")
 
         if ctx:
