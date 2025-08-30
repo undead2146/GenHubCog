@@ -294,11 +294,16 @@ class GitHubEventHandlers:
 
     async def reconcile_forum_tags(self, ctx=None, repo_filter: str = None):
         allowed_repos = await self.cog.config.allowed_repos()
+        print(f"🔍 Starting reconcile. Allowed repos: {allowed_repos}")
         # Get token from environment variable, fallback to config
         token = os.environ.get("GENHUB_GITHUB_TOKEN") or await self.cog.config.github_token()
+        print(f"🔑 Token source: {'ENV' if os.environ.get('GENHUB_GITHUB_TOKEN') else 'CONFIG'}")
         headers = {"Accept": "application/vnd.github+json"}
         if token:
             headers["Authorization"] = f"Bearer {token}"
+            print("✅ Token set in headers")
+        else:
+            print("❌ No token available")
 
         async with aiohttp.ClientSession(headers=headers) as session:
             processed_repos = set()
@@ -308,24 +313,30 @@ class GitHubEventHandlers:
                 # Normalize repo name
                 repo = repo.strip().lstrip("/")
                 if repo in processed_repos:
+                    print(f"⏭️ Skipping already processed repo: {repo}")
                     continue
                 processed_repos.add(repo)
                 repo_name = repo.split("/")[-1]
+                print(f"🔄 Processing repo: {repo}")
                 if ctx:
                     await ctx.send(f"🔄 Reconciling repo: {repo}")
 
                 # Fetch issues
                 issues_forum_id = await self.cog.config.issues_forum_id()
+                print(f"📋 Issues forum ID: {issues_forum_id}")
                 forum = self.cog.bot.get_channel(issues_forum_id)
                 issues_failed = False
                 if forum:
+                    print(f"✅ Issues forum found: {forum.name} ({forum.id})")
                     page = 1
                     max_pages = 50
                     total_issues = 0
                     while page <= max_pages:
                         url = f"https://api.github.com/repos/{repo}/issues?state=all&per_page=100&page={page}"
+                        print(f"🌐 Fetching issues page {page} for {repo}")
                         try:
                             async with session.get(url) as resp:
+                                print(f"📡 Issues API response: {resp.status}")
                                 if resp.status != 200:
                                     if ctx:
                                         if resp.status == 404:
@@ -348,10 +359,11 @@ class GitHubEventHandlers:
                                             issues_failed = True
                                     break
                                 data = await resp.json()
+                                print(f"📦 Issues data received: {len(data)} items")
                         except Exception as e:
                             # Swallow exceptions so reconcile continues/returns gracefully
                             print(
-                                f"⚠️ Failed to fetch issues for {repo}: {e}"
+                                f"❌ Exception fetching issues for {repo}: {e}"
                             )
                             if ctx:
                                 try:
@@ -366,8 +378,10 @@ class GitHubEventHandlers:
                             break
                         for item in data:
                             if item.get("pull_request"):
+                                print(f"⏭️ Skipping PR in issues: {item['number']}")
                                 continue  # skip PRs
                             total_issues += 1
+                            print(f"📝 Processing issue {item['number']}: {item['title'][:50]}...")
                             try:
                                 await self._reconcile_item(session, forum, repo, item, False, ctx, total_issues, repo_name)
                             except Exception as e:
@@ -376,6 +390,7 @@ class GitHubEventHandlers:
                         await asyncio.sleep(1)  # rate limit
                     if not issues_failed and ctx:
                         await ctx.send(f"✅ Processed {total_issues} issues for {repo}")
+                    print(f"✅ Issues processing complete for {repo}: {total_issues} processed")
                 else:
                     if ctx:
                         await ctx.send(f"⚠️ Issues forum not configured (issues_forum_id: {issues_forum_id}), skipping issues for {repo}")
@@ -383,16 +398,20 @@ class GitHubEventHandlers:
 
                 # Fetch PRs
                 prs_forum_id = await self.cog.config.prs_forum_id()
+                print(f"📋 PRs forum ID: {prs_forum_id}")
                 forum = self.cog.bot.get_channel(prs_forum_id)
                 prs_failed = False
                 if forum:
+                    print(f"✅ PRs forum found: {forum.name} ({forum.id})")
                     page = 1
                     max_pages = 50 
                     total_prs = 0
                     while page <= max_pages:
                         url = f"https://api.github.com/repos/{repo}/pulls?state=all&per_page=100&page={page}"
+                        print(f"🌐 Fetching PRs page {page} for {repo}")
                         try:
                             async with session.get(url) as resp:
+                                print(f"📡 PRs API response: {resp.status}")
                                 if resp.status != 200:
                                     if ctx:
                                         if resp.status == 404:
@@ -415,6 +434,7 @@ class GitHubEventHandlers:
                                             prs_failed = True
                                     break
                                 data = await resp.json()
+                                print(f"📦 PRs data received: {len(data)} items")
                         except Exception as e:
                             print(
                                 f"⚠️ Failed to fetch PRs for {repo}: {e}"
@@ -431,7 +451,11 @@ class GitHubEventHandlers:
                         if not data:
                             break
                         for item in data:
+                            if not item.get("pull_request"):
+                                print(f"⏭️ Skipping issue in PRs: {item['number']}")
+                                continue  # skip issues
                             total_prs += 1
+                            print(f"🔄 Processing PR {item['number']}: {item['title'][:50]}...")
                             try:
                                 await self._reconcile_item(session, forum, repo, item, True, ctx, total_prs, repo_name)
                             except Exception as e:
@@ -440,10 +464,10 @@ class GitHubEventHandlers:
                         await asyncio.sleep(1)
                     if not prs_failed and ctx:
                         await ctx.send(f"✅ Processed {total_prs} PRs for {repo}")
+                    print(f"✅ PRs processing complete for {repo}: {total_prs} processed")
                 else:
                     if ctx:
                         await ctx.send(f"⚠️ PRs forum not configured (prs_forum_id: {prs_forum_id}), skipping PRs for {repo}")
                     prs_failed = True
 
-        if ctx:
-            await ctx.send("✅ Reconciliation complete.")
+        print("🎉 Reconciliation process finished!")
