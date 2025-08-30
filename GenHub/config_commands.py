@@ -1,4 +1,5 @@
 from redbot.core import commands
+import os
 
 
 class ConfigCommands(commands.Cog):
@@ -85,11 +86,6 @@ class ConfigCommands(commands.Cog):
         await self._set_config(ctx, "contributor_role_id", role_id)
 
     @genhub.command()
-    async def token(self, ctx, token: str):
-        """Set the GitHub API token (Personal Access Token)."""
-        await self._set_config(ctx, "github_token", token)
-
-    @genhub.command()
     @commands.is_owner()
     async def reconcile(self, ctx, repo: str = None):
         """Reconcile all forum posts to ensure correct tags are applied.
@@ -102,11 +98,13 @@ class ConfigCommands(commands.Cog):
     async def showconfig(self, ctx):
         """Show the current GenHub configuration."""
         config = await self.cog.config.all()
+        token_status = "✅ Set via GENHUB_GITHUB_TOKEN environment variable" if os.environ.get("GENHUB_GITHUB_TOKEN") else ("✅ Set in config" if config['github_token'] else "❌ Not set")
         message = (
             "📌 **GenHub Configuration** 📌\n"
             f"**Webhook Host:** {config['webhook_host']}\n"
             f"**Webhook Port:** {config['webhook_port']}\n"
             f"**GitHub Secret:** {config['github_secret']}\n"
+            f"**GitHub Token:** {token_status}\n"
             f"**Allowed Repos:** {config['allowed_repos']}\n"
             f"**Log Channel ID:** {config['log_channel_id']}\n"
             f"**Issues Forum ID:** {config['issues_forum_id']}\n"

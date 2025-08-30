@@ -149,7 +149,6 @@ async def test_other_setters_and_showconfig():
     await cmd.issuesfeedchat(ctx, 444)
     await cmd.prsfeedchat(ctx, 555)
     await cmd.contributorrole(ctx, 666)
-    await cmd.token(ctx, "tok")
 
     # showconfig
     async def fake_all():
@@ -157,6 +156,7 @@ async def test_other_setters_and_showconfig():
             "webhook_host": "h",
             "webhook_port": 1,
             "github_secret": "s",
+            "github_token": "",
             "allowed_repos": ["r"],
             "log_channel_id": 1,
             "issues_forum_id": 2,

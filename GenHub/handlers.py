@@ -2,6 +2,7 @@ import discord
 import asyncio
 import aiohttp
 import re
+import os
 from .utils import (
     send_message,
     get_role_mention,
@@ -293,7 +294,8 @@ class GitHubEventHandlers:
 
     async def reconcile_forum_tags(self, ctx=None, repo_filter: str = None):
         allowed_repos = await self.cog.config.allowed_repos()
-        token = await self.cog.config.github_token()
+        # Get token from environment variable, fallback to config
+        token = os.environ.get("GENHUB_GITHUB_TOKEN") or await self.cog.config.github_token()
         headers = {"Accept": "application/vnd.github+json"}
         if token:
             headers["Authorization"] = f"Bearer {token}"
@@ -374,6 +376,10 @@ class GitHubEventHandlers:
                         await asyncio.sleep(1)  # rate limit
                     if not issues_failed and ctx:
                         await ctx.send(f"✅ Processed {total_issues} issues for {repo}")
+                else:
+                    if ctx:
+                        await ctx.send(f"⚠️ Issues forum not configured (issues_forum_id: {issues_forum_id}), skipping issues for {repo}")
+                    issues_failed = True
 
                 # Fetch PRs
                 prs_forum_id = await self.cog.config.prs_forum_id()
@@ -434,6 +440,10 @@ class GitHubEventHandlers:
                         await asyncio.sleep(1)
                     if not prs_failed and ctx:
                         await ctx.send(f"✅ Processed {total_prs} PRs for {repo}")
+                else:
+                    if ctx:
+                        await ctx.send(f"⚠️ PRs forum not configured (prs_forum_id: {prs_forum_id}), skipping PRs for {repo}")
+                    prs_failed = True
 
         if ctx:
             await ctx.send("✅ Reconciliation complete.")
