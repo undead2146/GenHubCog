@@ -33,7 +33,7 @@ async def send_message(channel, content: str, prefix: str = ""):
             await channel.send(chunk, allowed_mentions=allowed_mentions)
 
 
-async def get_role_mention(guild, role_id: int):
+def get_role_mention(guild, role_id: int):
     """Resolve a role mention safely."""
     if not role_id:
         return ""
@@ -137,9 +137,14 @@ async def find_thread(bot, forum_id, repo_full_name, topic_number, thread_cache)
     if not forum:
         return None
 
-    # Try patterns: first with brackets, then with #, then just number
+    # Get repository short name for pattern matching
+    repo_short_name = repo_full_name.split('/')[-1]
+
+    # Try patterns: first with repo name and brackets, then with repo name and #, then just number
     patterns = [
-        rf"「#{topic_number}」(?:\D|$)",
+        rf"「{re.escape(repo_short_name)}#{topic_number}」(?:\D|$)",
+        rf"{re.escape(repo_short_name)}#{topic_number}(?:\D|$)",
+        rf"「#{topic_number}」(?:\D|$)",  # Legacy pattern for backward compatibility
         rf"#{topic_number}(?:\D|$)",
         rf"{topic_number}(?:\D|$)",
     ]
@@ -189,7 +194,7 @@ async def find_thread(bot, forum_id, repo_full_name, topic_number, thread_cache)
 
 
 async def get_or_create_thread(
-    bot, forum_id, repo_full_name, number, title, url, tags, thread_cache
+    bot, forum_id, repo_full_name, number, title, url, tags, thread_cache, initial_content=None
 ):
     # First try to find an existing thread
     existing = await find_thread(bot, forum_id, repo_full_name, number, thread_cache)
@@ -216,7 +221,8 @@ async def get_or_create_thread(
                 if hasattr(existing, 'name'):
                     _ = existing.name
                 # Update name if it doesn't match the expected
-                expected_name = f"「#{number}」{title}"
+                repo_short_name = repo_full_name.split('/')[-1]
+                expected_name = f"「{repo_short_name}#{number}」{title}"
                 if hasattr(existing, 'name') and existing.name != expected_name:
                     try:
                         await existing.edit(name=expected_name)
@@ -266,11 +272,18 @@ async def get_or_create_thread(
         print(f"⚠️ Could not find forum {forum_id}")
         return None, False
 
+    # Create thread name with repository to avoid conflicts
+    repo_short_name = repo_full_name.split('/')[-1]
+    thread_name = f"「{repo_short_name}#{number}」{title}"
+
     print(f"🔄 Creating new thread for {repo_full_name}#{number}")
     try:
+        # Use provided initial content or create a proper formatted message
+        content = initial_content if initial_content else f"🆕 Issue created: [{title}]({url})\n👤 By: Unknown"
+
         thread_with_msg = await forum.create_thread(
-            name=f"「#{number}」{title}",
-            content=f"Creating thread for {repo_full_name}#{number}...",  # Placeholder content required by Discord
+            name=thread_name,
+            content=content,
             applied_tags=tags,
         )
         print(f"✅ Created new thread for {repo_full_name}#{number}")

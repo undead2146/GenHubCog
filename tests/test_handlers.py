@@ -40,17 +40,20 @@ async def test_handle_issue_opened_creates_message():
     data = {"action": "opened", "issue": issue}
 
     async def fake_get_or_create_thread(*args, **kwargs):
+        # Check if initial_content was passed for opened action
+        assert len(args) >= 9  # Should have 9 arguments
+        initial_content = args[8] if len(args) > 8 else None  # initial_content is the 9th argument
+        assert initial_content is not None
+        assert "🆕 Issue created" in initial_content
+        assert "Test Issue" in initial_content
         return mock_thread, False
 
     with patch("GenHub.handlers.send_message", new_callable=AsyncMock) as mock_send, \
          patch("GenHub.handlers.get_or_create_thread", side_effect=fake_get_or_create_thread):
         await handler.handle_issue(data, "owner/repo")
 
-        mock_send.assert_awaited()
-        args, kwargs = mock_send.await_args
-        body = args[1]
-        prefix = kwargs.get("prefix", "")
-        assert "issue created" in prefix.lower() or "Test Issue" in body
+        # For opened action, send_message should NOT be called since initial content is used
+        mock_send.assert_not_awaited()
 
 
 @pytest.mark.asyncio

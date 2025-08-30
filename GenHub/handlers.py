@@ -75,6 +75,15 @@ class GitHubEventHandlers:
         forum_id = await self.cog.config.issues_forum_id()
         forum = self.cog.bot.get_channel(forum_id)
         tags = await get_issue_tags(forum, issue)
+
+        # Prepare initial content for thread creation
+        role_mention = get_role_mention(
+            forum.guild if forum else None, await self.cog.config.contributor_role_id()
+        )
+        initial_content = None
+        if action == "opened":
+            initial_content = format_message("🆕", "Issue created", title, url, author, role_mention)
+
         thread, _ = await get_or_create_thread(
             self.cog.bot,
             forum_id,
@@ -84,19 +93,15 @@ class GitHubEventHandlers:
             url,
             tags,
             self.cog.thread_cache,
+            initial_content,
         )
         if not thread:
             return
 
-        role_mention = await get_role_mention(
-            thread.guild, await self.cog.config.contributor_role_id()
-        )
-
-        if action == "opened":
-            await send_message(
-                thread,
-                format_message("🆕", "Issue created", title, url, author, role_mention),
-            )
+        # Send action-specific messages (skip "opened" if we already sent initial content)
+        if action == "opened" and initial_content:
+            # Initial content already sent during thread creation
+            pass
         elif action == "closed":
             await update_status_tag(thread, "Closed")
             await send_message(
@@ -136,16 +141,25 @@ class GitHubEventHandlers:
         forum_id = await self.cog.config.prs_forum_id()
         forum = self.cog.bot.get_channel(forum_id)
         tags = await get_pr_tags(forum, pr)
+
+        # Prepare initial content for thread creation
+        role_mention = get_role_mention(
+            forum.guild if forum else None, await self.cog.config.contributor_role_id()
+        )
+        initial_content = None
+        if action == "opened":
+            initial_content = format_message("🆕", "PR created", title, url, author, role_mention)
+
         thread, _ = await get_or_create_thread(
-            self.cog.bot, forum_id, repo_full_name, number, title, url, tags, self.cog.thread_cache
+            self.cog.bot, forum_id, repo_full_name, number, title, url, tags, self.cog.thread_cache, initial_content
         )
         if not thread:
             return
 
-        role_mention = await get_role_mention(thread.guild, await self.cog.config.contributor_role_id())
-
-        if action == "opened":
-            await send_message(thread, format_message("🆕", "PR created", title, url, author, role_mention))
+        # Send action-specific messages (skip "opened" if we already sent initial content)
+        if action == "opened" and initial_content:
+            # Initial content already sent during thread creation
+            pass
         elif action == "closed":
             if pr.get("merged") or pr.get("merged_at"):
                 await update_status_tag(thread, "Merged")
@@ -179,7 +193,7 @@ class GitHubEventHandlers:
         if not thread or not body:
             return
 
-        role_mention = await get_role_mention(thread.guild, await self.cog.config.contributor_role_id())
+        role_mention = get_role_mention(thread.guild, await self.cog.config.contributor_role_id())
         prefix = f"💬 **New {'PR' if is_pr else 'Issue'} comment** by **{author}** {role_mention} → [View Comment]({url})\n"
         await send_message(thread, body, prefix=prefix)
 
@@ -235,7 +249,7 @@ class GitHubEventHandlers:
             if not thread:
                 return
 
-            role_mention = await get_role_mention(thread.guild, await self.cog.config.contributor_role_id())
+            role_mention = get_role_mention(thread.guild, await self.cog.config.contributor_role_id())
 
             if entry["body"]:
                 prefix = f"📝 **Review submitted** by **{entry['author']}** {role_mention} → [View Review]({entry['url']})\n"
@@ -267,8 +281,15 @@ class GitHubEventHandlers:
             tags.append(repo_tag)
 
         # Ensure thread exists (create if missing)
+        role_mention = get_role_mention(
+            forum.guild, await self.cog.config.contributor_role_id()
+        )
+        emoji = "🆕"
+        action = "PR created" if is_pr else "Issue created"
+        initial_content = format_message(emoji, action, title, url, author, role_mention)
+
         thread, created = await get_or_create_thread(
-            self.cog.bot, forum_id, repo, number, title, url, tags, self.cog.thread_cache
+            self.cog.bot, forum_id, repo, number, title, url, tags, self.cog.thread_cache, initial_content
         )
         if not thread:
             print(f"❌ Failed to get or create thread for {repo}#{number}")
@@ -277,14 +298,8 @@ class GitHubEventHandlers:
         print(f"{'✅ Created' if created else '📝 Found existing'} thread for {repo}#{number}")
 
         if created:
-            # Newly created → send initial message
-            role_mention = await get_role_mention(
-                thread.guild, await self.cog.config.contributor_role_id()
-            )
-            emoji = "🆕"
-            action = "PR created" if is_pr else "Issue created"
-            msg = format_message(emoji, action, title, url, author, role_mention)
-            await send_message(thread, msg)
+            # Newly created → initial message already sent via initial_content
+            pass
         else:
             # Existing thread - check if it needs the initial message
             # This handles cases where thread was deleted and recreated
@@ -297,13 +312,7 @@ class GitHubEventHandlers:
 
                 if not history:
                     # Thread is empty, send initial message
-                    role_mention = await get_role_mention(
-                        thread.guild, await self.cog.config.contributor_role_id()
-                    )
-                    emoji = "🆕"
-                    action = "PR created" if is_pr else "Issue created"
-                    msg = format_message(emoji, action, title, url, author, role_mention)
-                    await send_message(thread, msg)
+                    await send_message(thread, initial_content)
                     print(f"📝 Sent initial message to existing empty thread #{number}")
             except Exception as e:
                 print(f"⚠️ Could not check thread history for #{number}: {e}")

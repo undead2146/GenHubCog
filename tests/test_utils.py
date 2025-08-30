@@ -31,9 +31,9 @@ async def test_get_role_mention_none_and_missing():
     from GenHub import utils
     guild = Mock()
     guild.get_role = Mock(return_value=None)
-    result = await utils.get_role_mention(guild, None)
+    result = utils.get_role_mention(guild, None)
     assert result == ""
-    result = await utils.get_role_mention(guild, 123)
+    result = utils.get_role_mention(guild, 123)
     assert result == ""
 
 
