@@ -43,6 +43,9 @@ def make_fake_aiohttp_session(fake_json_data, status: int = 200):
             return False
 
     class FakeSession:
+        def __init__(self):
+            self.calls = 0
+
         async def __aenter__(self):
             return self
 
@@ -51,6 +54,9 @@ def make_fake_aiohttp_session(fake_json_data, status: int = 200):
 
         # return FakeResponse directly (supports 'async with session.get(...) as resp')
         def get(self, url, headers=None):
+            self.calls += 1
+            if self.calls > 1:
+                return FakeResponse([], status)  
             return FakeResponse(fake_json_data, status)
 
     return FakeSession()

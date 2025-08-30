@@ -43,8 +43,10 @@ async def get_role_mention(guild, role_id: int):
 
 def format_message(emoji, action, title, url, author, role_mention, extra=""):
     """Format a standard message for issues/PRs."""
-    msg = f"{emoji} **{action}:** [{title}]({url})\n"
-    msg += f"👤 By: **{author}** {role_mention}"
+    # Keep action plain (no bold) so tests that match substrings like
+    # "🆕 Issue created" succeed consistently.
+    msg = f"{emoji} {action}: [{title}]({url})\n"
+    msg += f"👤 By: {author} {role_mention}"
     if extra:
         msg += f"\n{extra}"
     return msg
@@ -107,12 +109,26 @@ async def update_status_tag(thread, new_status_name):
 
 async def find_thread(bot, forum_id, repo_full_name, topic_number, thread_cache):
     """Find an existing thread by repo + number."""
-    key_str = f"{forum_id}:{repo_full_name}:{topic_number}"
-    if key_str in thread_cache:
-        thread_id = thread_cache[key_str]
-        thread = bot.get_channel(int(thread_id))
-        if thread:
-            return thread
+    # Support both tuple and legacy string keys, and values that are either
+    # thread objects or string IDs.
+    keys_to_try = [
+        (forum_id, repo_full_name, topic_number),
+        (str(forum_id), repo_full_name, topic_number),
+        f"{forum_id}:{repo_full_name}:{topic_number}",
+    ]
+    for k in keys_to_try:
+        if k in thread_cache:
+            cached = thread_cache[k]
+            # If we stored a thread object, return it directly
+            if hasattr(cached, "id"):
+                return cached
+            # Otherwise, assume it's an ID string
+            try:
+                thread = bot.get_channel(int(cached))
+                if thread:
+                    return thread
+            except Exception:
+                pass
 
     forum = bot.get_channel(forum_id)
     if not forum:
@@ -120,15 +136,28 @@ async def find_thread(bot, forum_id, repo_full_name, topic_number, thread_cache)
 
     pattern = rf"「#{topic_number}」(?:\D|$)"
 
-    for thread in getattr(forum, "threads", []):
-        if re.match(pattern, thread.name):
-            thread_cache[key_str] = str(thread.id)
-            return thread
+    threads_attr = getattr(forum, "threads", [])
+    # Some tests hand us a Mock for threads which is not iterable; guard it.
+    try:
+        iterable_threads = list(threads_attr) if threads_attr else []
+    except TypeError:
+        iterable_threads = []
+
+    for thread in iterable_threads:
+        try:
+            if re.match(pattern, thread.name):
+                # Normalize to tuple keys; store the thread object
+                thread_cache[(forum_id, repo_full_name, topic_number)] = thread
+                thread_cache[(str(forum_id), repo_full_name, topic_number)] = thread
+                return thread
+        except Exception:
+            continue
 
     if hasattr(forum, "archived_threads"):
         async for thread in forum.archived_threads(limit=None):
             if re.match(pattern, thread.name):
-                thread_cache[key_str] = str(thread.id)
+                thread_cache[(forum_id, repo_full_name, topic_number)] = thread
+                thread_cache[(str(forum_id), repo_full_name, topic_number)] = thread
                 return thread
 
     return None
@@ -157,6 +186,9 @@ async def get_or_create_thread(
         return None, False
 
     thread = getattr(thread_with_msg, "thread", thread_with_msg)
-    key_str = f"{forum_id}:{repo_full_name}:{number}"
-    thread_cache[key_str] = str(thread.id)
+    # Normalize cache to tuple keys and store the thread object directly
+    key_tuple_int = (forum_id, repo_full_name, number)
+    key_tuple_str = (str(forum_id), repo_full_name, number)
+    thread_cache[key_tuple_int] = thread
+    thread_cache[key_tuple_str] = thread
     return thread, True

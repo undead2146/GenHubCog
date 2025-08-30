@@ -311,27 +311,45 @@ class GitHubEventHandlers:
                 forum = self.cog.bot.get_channel(issues_forum_id)
                 if forum:
                     page = 1
+                    max_pages = 50
                     total_issues = 0
-                    while True:
+                    while page <= max_pages:
                         url = f"https://api.github.com/repos/{repo}/issues?state=all&per_page=100&page={page}"
-                        async with session.get(url) as resp:
-                            if resp.status != 200:
-                                if ctx:
-                                    await ctx.send(f"⚠️ Failed to fetch issues for {repo}, status: {resp.status}")
-                                break
-                            data = await resp.json()
-                            if not data:
-                                break
-                            for item in data:
-                                if item.get("pull_request"):
-                                    continue  # skip PRs
-                                total_issues += 1
+                        try:
+                            async with session.get(url) as resp:
+                                if resp.status != 200:
+                                    if ctx:
+                                        await ctx.send(
+                                            f"⚠️ Failed to fetch issues for {repo}, "
+                                            f"status: {resp.status}"
+                                        )
+                                    break
+                                data = await resp.json()
+                        except Exception as e:
+                            # Swallow exceptions so reconcile continues/returns gracefully
+                            print(
+                                f"⚠️ Failed to fetch issues for {repo}: {e}"
+                            )
+                            if ctx:
                                 try:
-                                    await self._reconcile_item(session, forum, repo, item, False, ctx, total_issues, repo_name)
-                                except Exception as e:
-                                    print(f"❌ Error reconciling issue {item.get('number')}: {e}")
-                            page += 1
-                            await asyncio.sleep(1)  # rate limit
+                                    await ctx.send(
+                                        f"⚠️ Failed to fetch issues for {repo}: {e}"
+                                    )
+                                except Exception:
+                                    pass
+                            break
+                        if not data:
+                            break
+                        for item in data:
+                            if item.get("pull_request"):
+                                continue  # skip PRs
+                            total_issues += 1
+                            try:
+                                await self._reconcile_item(session, forum, repo, item, False, ctx, total_issues, repo_name)
+                            except Exception as e:
+                                print(f"❌ Error reconciling issue {item.get('number')}: {e}")
+                        page += 1
+                        await asyncio.sleep(1)  # rate limit
                     if ctx:
                         await ctx.send(f"✅ Processed {total_issues} issues for {repo}")
 
@@ -340,25 +358,42 @@ class GitHubEventHandlers:
                 forum = self.cog.bot.get_channel(prs_forum_id)
                 if forum:
                     page = 1
+                    max_pages = 50 
                     total_prs = 0
-                    while True:
+                    while page <= max_pages:
                         url = f"https://api.github.com/repos/{repo}/pulls?state=all&per_page=100&page={page}"
-                        async with session.get(url) as resp:
-                            if resp.status != 200:
-                                if ctx:
-                                    await ctx.send(f"⚠️ Failed to fetch PRs for {repo}, status: {resp.status}")
-                                break
-                            data = await resp.json()
-                            if not data:
-                                break
-                            for item in data:
-                                total_prs += 1
+                        try:
+                            async with session.get(url) as resp:
+                                if resp.status != 200:
+                                    if ctx:
+                                        await ctx.send(
+                                            f"⚠️ Failed to fetch PRs for {repo}, "
+                                            f"status: {resp.status}"
+                                        )
+                                    break
+                                data = await resp.json()
+                        except Exception as e:
+                            print(
+                                f"⚠️ Failed to fetch PRs for {repo}: {e}"
+                            )
+                            if ctx:
                                 try:
-                                    await self._reconcile_item(session, forum, repo, item, True, ctx, total_prs, repo_name)
-                                except Exception as e:
-                                    print(f"❌ Error reconciling PR {item.get('number')}: {e}")
-                            page += 1
-                            await asyncio.sleep(1)
+                                    await ctx.send(
+                                        f"⚠️ Failed to fetch PRs for {repo}: {e}"
+                                    )
+                                except Exception:
+                                    pass
+                            break
+                        if not data:
+                            break
+                        for item in data:
+                            total_prs += 1
+                            try:
+                                await self._reconcile_item(session, forum, repo, item, True, ctx, total_prs, repo_name)
+                            except Exception as e:
+                                print(f"❌ Error reconciling PR {item.get('number')}: {e}")
+                        page += 1
+                        await asyncio.sleep(1)
                     if ctx:
                         await ctx.send(f"✅ Processed {total_prs} PRs for {repo}")
 
