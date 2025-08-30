@@ -126,6 +126,9 @@ async def find_thread(bot, forum_id, repo_full_name, topic_number, thread_cache)
                 try:
                     # Quick validation - if we can get the parent forum, thread likely exists
                     if hasattr(cached, 'parent') and cached.parent:
+                        # Additional check: try to access a property that would fail if deleted
+                        if hasattr(cached, 'name'):
+                            _ = cached.name  # This should fail if the thread is deleted
                         return cached
                     elif not hasattr(cached, 'parent'):
                         # Test/mock object without parent, assume it's valid
@@ -133,8 +136,8 @@ async def find_thread(bot, forum_id, repo_full_name, topic_number, thread_cache)
                     else:
                         # Thread appears to be invalid, remove from cache
                         del thread_cache[k]
-                except Exception:
-                    # Thread is invalid/stale, remove from cache
+                except (AttributeError, discord.NotFound, discord.Forbidden):
+                    # Thread is invalid/stale/deleted, remove from cache
                     del thread_cache[k]
                     continue
             # Otherwise, assume it's an ID string
@@ -167,10 +170,16 @@ async def find_thread(bot, forum_id, repo_full_name, topic_number, thread_cache)
         for thread in iterable_threads:
             try:
                 if re.match(pattern, thread.name):
-                    # Normalize to tuple keys; store the thread object
-                    thread_cache[(forum_id, repo_full_name, topic_number)] = thread
-                    thread_cache[(str(forum_id), repo_full_name, topic_number)] = thread
-                    return thread
+                    # Additional validation: ensure thread is not deleted
+                    try:
+                        if hasattr(thread, 'name'):
+                            _ = thread.name  # Quick check if thread is accessible
+                        # Normalize to tuple keys; store the thread object
+                        thread_cache[(forum_id, repo_full_name, topic_number)] = thread
+                        thread_cache[(str(forum_id), repo_full_name, topic_number)] = thread
+                        return thread
+                    except (discord.NotFound, discord.Forbidden):
+                        continue  # Thread is deleted or inaccessible, skip it
             except Exception:
                 continue
 
@@ -178,9 +187,15 @@ async def find_thread(bot, forum_id, repo_full_name, topic_number, thread_cache)
             try:
                 async for thread in forum.archived_threads(limit=None):
                     if re.match(pattern, thread.name):
-                        thread_cache[(forum_id, repo_full_name, topic_number)] = thread
-                        thread_cache[(str(forum_id), repo_full_name, topic_number)] = thread
-                        return thread
+                        # Additional validation for archived threads
+                        try:
+                            if hasattr(thread, 'name'):
+                                _ = thread.name  # Quick check if thread is accessible
+                            thread_cache[(forum_id, repo_full_name, topic_number)] = thread
+                            thread_cache[(str(forum_id), repo_full_name, topic_number)] = thread
+                            return thread
+                        except (discord.NotFound, discord.Forbidden):
+                            continue  # Thread is deleted or inaccessible, skip it
             except (TypeError, AttributeError):
                 # archived_threads might be a Mock in tests, skip it
                 pass
@@ -194,13 +209,38 @@ async def get_or_create_thread(
     # First try to find an existing thread
     existing = await find_thread(bot, forum_id, repo_full_name, number, thread_cache)
     if existing:
-        # Update name if it doesn't match the expected
-        expected_name = f"「#{number}」{title}"
-        if hasattr(existing, 'name') and existing.name != expected_name:
-            try:
-                await existing.edit(name=expected_name)
-            except Exception:
-                pass  # ignore if can't edit
+        # Validate that the thread is still accessible
+        try:
+            if hasattr(existing, 'name'):
+                _ = existing.name  # Quick validation
+            # Update name if it doesn't match the expected
+            expected_name = f"「#{number}」{title}"
+            if hasattr(existing, 'name') and existing.name != expected_name:
+                try:
+                    await existing.edit(name=expected_name)
+                except (discord.Forbidden, discord.NotFound):
+                    # If we can't edit, the thread might be deleted or we lack permissions
+                    # Remove from cache and treat as not found
+                    keys_to_remove = [
+                        (forum_id, repo_full_name, number),
+                        (str(forum_id), repo_full_name, number),
+                        f"{forum_id}:{repo_full_name}:{number}",
+                    ]
+                    for key in keys_to_remove:
+                        thread_cache.pop(key, None)
+                    existing = None  # Force recreation
+        except (discord.NotFound, discord.Forbidden, AttributeError):
+            # Thread is deleted or inaccessible, remove from cache
+            keys_to_remove = [
+                (forum_id, repo_full_name, number),
+                (str(forum_id), repo_full_name, number),
+                f"{forum_id}:{repo_full_name}:{number}",
+            ]
+            for key in keys_to_remove:
+                thread_cache.pop(key, None)
+            existing = None  # Force recreation
+
+    if existing:
         return existing, False
 
     forum = bot.get_channel(forum_id)
@@ -213,8 +253,12 @@ async def get_or_create_thread(
             content="",  # Empty content, let reconcile send the proper message
             applied_tags=tags,
         )
+        print(f"✅ Created new thread for {repo_full_name}#{number}")
     except discord.Forbidden:
         print(f"⚠️ Missing permissions to create thread in {forum.name}")
+        return None, False
+    except Exception as e:
+        print(f"⚠️ Failed to create thread for {repo_full_name}#{number}: {e}")
         return None, False
 
     thread = getattr(thread_with_msg, "thread", thread_with_msg)

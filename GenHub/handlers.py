@@ -282,6 +282,28 @@ class GitHubEventHandlers:
             action = "PR created" if is_pr else "Issue created"
             msg = format_message(emoji, action, title, url, author, role_mention)
             await send_message(thread, msg)
+        else:
+            # Existing thread - check if it needs the initial message
+            # This handles cases where thread was deleted and recreated
+            try:
+                # Check if thread has any messages (might be empty if just recreated)
+                history = []
+                async for message in thread.history(limit=1, oldest_first=True):
+                    history.append(message)
+                    break
+
+                if not history:
+                    # Thread is empty, send initial message
+                    role_mention = await get_role_mention(
+                        thread.guild, await self.cog.config.contributor_role_id()
+                    )
+                    emoji = "🆕"
+                    action = "PR created" if is_pr else "Issue created"
+                    msg = format_message(emoji, action, title, url, author, role_mention)
+                    await send_message(thread, msg)
+                    print(f"📝 Sent initial message to existing empty thread #{number}")
+            except Exception as e:
+                print(f"⚠️ Could not check thread history for #{number}: {e}")
 
         # Always reconcile tags (update if changed)
         current = set(t.name.lower() for t in (thread.applied_tags or []))
@@ -324,220 +346,198 @@ class GitHubEventHandlers:
                 # Check if repository exists first
                 repo_check_url = f"https://api.github.com/repos/{repo}"
                 print(f"🔍 Checking if repository {repo} exists...")
+                repo_accessible = True
                 try:
                     async with session.get(repo_check_url) as resp:
                         if resp.status == 404:
                             print(f"❌ Repository '{repo}' does not exist")
                             if ctx:
                                 await ctx.send(f"❌ Repository '{repo}' does not exist. Please check the repository name.")
-                            continue  # Skip to next repo
+                            repo_accessible = False
                         elif resp.status == 403:
                             print(f"🚫 Cannot access repository '{repo}' (private or no permission)")
                             if ctx:
                                 await ctx.send(f"🚫 Cannot access '{repo}'. Repository may be private or token lacks permission.")
-                            continue  # Skip to next repo
+                            repo_accessible = False
                         elif resp.status != 200:
                             print(f"⚠️ Unexpected response {resp.status} when checking repository {repo}")
                             if ctx:
                                 await ctx.send(f"⚠️ Cannot verify repository '{repo}' (status: {resp.status})")
-                            continue  # Skip to next repo
+                            repo_accessible = False
                         else:
                             print(f"✅ Repository {repo} exists and is accessible")
                 except Exception as e:
                     print(f"❌ Error checking repository {repo}: {e}")
                     if ctx:
                         await ctx.send(f"❌ Error checking repository '{repo}': {e}")
-                    continue  # Skip to next repo
+                    repo_accessible = False
 
-                # Fetch issues
-                issues_forum_id = await self.cog.config.issues_forum_id()
-                print(f"📋 Issues forum ID: {issues_forum_id}")
-                forum = self.cog.bot.get_channel(issues_forum_id)
-                issues_failed = False
-                if forum:
-                    print(f"✅ Issues forum found: {forum.name} ({forum.id})")
-                    page = 1
-                    max_pages = 50
-                    total_issues = 0
-                    while page <= max_pages:
-                        url = f"https://api.github.com/repos/{repo}/issues?state=all&per_page=100&page={page}"
-                        print(f"🌐 Fetching issues page {page} for {repo}")
-                        try:
-                            async with session.get(url) as resp:
-                                print(f"📡 Issues API response: {resp.status}")
-                                if resp.status == 404:
-                                    print(f"❌ Repository '{repo}' not found (404)")
-                                    print(f"ℹ️  Please verify the repository name and ensure it exists")
-                                    if ctx:
-                                        await ctx.send(f"❌ Repository '{repo}' not found. Please check the repository name.")
-                                    break
-                                elif resp.status == 403:
-                                    print(f"🚫 Access forbidden to '{repo}' (403)")
-                                    print(f"ℹ️  Token may not have permission or repository may be private")
-                                    if ctx:
-                                        await ctx.send(f"🚫 Cannot access '{repo}'. Check token permissions.")
-                                    break
-                                elif resp.status != 200:
-                                    print(f"⚠️ Unexpected response {resp.status} for {repo}")
-                                    if ctx:
-                                        await ctx.send(f"⚠️ Failed to fetch issues for '{repo}' (status: {resp.status})")
-                                    break
-                                    if ctx:
-                                        if resp.status == 404:
-                                            await ctx.send(
-                                                f"❌ Failed to fetch issues for {repo}, status: 404 (repo not found). Removing from allowed repos."
-                                            )
-                                            async with self.cog.config.allowed_repos() as repos:
-                                                if repo in repos:
-                                                    repos.remove(repo)
-                                            issues_failed = True
-                                        elif resp.status == 403:
-                                            await ctx.send(
-                                                f"⚠️ Failed to fetch issues for {repo}, status: 403 (forbidden). Check token or permissions."
-                                            )
-                                            issues_failed = True
-                                        else:
-                                            await ctx.send(
-                                                f"⚠️ Failed to fetch issues for {repo}, status: {resp.status}"
-                                            )
-                                            issues_failed = True
-                                    break
-                                data = await resp.json()
-                                print(f"📦 Issues data received: {len(data)} items")
-                                if len(data) == 0:
-                                    print(f"ℹ️  No issues found for {repo}. This could mean:")
-                                    print(f"   - Repository has no issues")
-                                    print(f"   - Repository doesn't exist")
-                                    print(f"   - Token lacks permission to view issues")
-                                    print(f"   - Repository is private and token has no access")
-                        except Exception as e:
-                            # Swallow exceptions so reconcile continues/returns gracefully
-                            print(
-                                f"❌ Exception fetching issues for {repo}: {e}"
-                            )
-                            if ctx:
-                                try:
-                                    await ctx.send(
-                                        f"⚠️ Failed to fetch issues for {repo}: {e}"
-                                    )
-                                except Exception:
-                                    pass
-                            issues_failed = True
-                            break
-                        if not data:
-                            break
-                        for item in data:
-                            if item.get("pull_request"):
-                                print(f"⏭️ Skipping PR in issues: {item['number']}")
-                                continue  # skip PRs
-                            total_issues += 1
-                            print(f"📝 Processing issue {item['number']}: {item['title'][:50]}...")
-                            try:
-                                await self._reconcile_item(session, forum, repo, item, False, ctx, total_issues, repo_name)
-                            except Exception as e:
-                                print(f"❌ Error reconciling issue {item.get('number')}: {e}")
-                        page += 1
-                        await asyncio.sleep(1)  # rate limit
-                    if not issues_failed and ctx:
-                        await ctx.send(f"✅ Processed {total_issues} issues for {repo}")
-                    print(f"✅ Issues processing complete for {repo}: {total_issues} processed")
-                else:
-                    if ctx:
-                        await ctx.send(f"⚠️ Issues forum not configured (issues_forum_id: {issues_forum_id}), skipping issues for {repo}")
-                    issues_failed = True
+                if not repo_accessible:
+                    continue  # Skip this repo entirely
 
-                # Fetch PRs
-                prs_forum_id = await self.cog.config.prs_forum_id()
-                print(f"📋 PRs forum ID: {prs_forum_id}")
-                forum = self.cog.bot.get_channel(prs_forum_id)
-                prs_failed = False
-                if forum:
-                    print(f"✅ PRs forum found: {forum.name} ({forum.id})")
-                    page = 1
-                    max_pages = 50 
-                    total_prs = 0
-                    while page <= max_pages:
-                        url = f"https://api.github.com/repos/{repo}/pulls?state=all&per_page=100&page={page}"
-                        print(f"🌐 Fetching PRs page {page} for {repo}")
-                        try:
-                            async with session.get(url) as resp:
-                                print(f"📡 PRs API response: {resp.status}")
-                                if resp.status == 404:
-                                    print(f"❌ Repository '{repo}' not found (404)")
-                                    print(f"ℹ️  Please verify the repository name and ensure it exists")
-                                    if ctx:
-                                        await ctx.send(f"❌ Repository '{repo}' not found. Please check the repository name.")
-                                    break
-                                elif resp.status == 403:
-                                    print(f"🚫 Access forbidden to '{repo}' (403)")
-                                    print(f"ℹ️  Token may not have permission or repository may be private")
-                                    if ctx:
-                                        await ctx.send(f"🚫 Cannot access '{repo}'. Check token permissions.")
-                                    break
-                                elif resp.status != 200:
-                                    print(f"⚠️ Unexpected response {resp.status} for {repo}")
-                                    if ctx:
-                                        await ctx.send(f"⚠️ Failed to fetch PRs for '{repo}' (status: {resp.status})")
-                                    break
-                                    if ctx:
-                                        if resp.status == 404:
-                                            await ctx.send(
-                                                f"❌ Failed to fetch PRs for {repo}, status: 404 (repo not found). Removing from allowed repos."
-                                            )
-                                            async with self.cog.config.allowed_repos() as repos:
-                                                if repo in repos:
-                                                    repos.remove(repo)
-                                            prs_failed = True
-                                        elif resp.status == 403:
-                                            await ctx.send(
-                                                f"⚠️ Failed to fetch PRs for {repo}, status: 403 (forbidden). Check token or permissions."
-                                            )
-                                            prs_failed = True
-                                        else:
-                                            await ctx.send(
-                                                f"⚠️ Failed to fetch PRs for {repo}, status: {resp.status}"
-                                            )
-                                            prs_failed = True
-                                    break
-                                data = await resp.json()
-                                print(f"📦 PRs data received: {len(data)} items")
-                                if len(data) == 0:
-                                    print(f"ℹ️  No PRs found for {repo}. This could mean:")
-                                    print(f"   - Repository has no pull requests")
-                                    print(f"   - Repository doesn't exist")
-                                    print(f"   - Token lacks permission to view PRs")
-                                    print(f"   - Repository is private and token has no access")
-                        except Exception as e:
-                            print(
-                                f"⚠️ Failed to fetch PRs for {repo}: {e}"
-                            )
-                            if ctx:
-                                try:
-                                    await ctx.send(
-                                        f"⚠️ Failed to fetch PRs for {repo}: {e}"
-                                    )
-                                except Exception:
-                                    pass
-                            prs_failed = True
-                            break
-                        if not data:
-                            break
-                        for item in data:
-                            # In PRs endpoint, all items are PRs by definition, no filtering needed
-                            total_prs += 1
-                            print(f"🔄 Processing PR {item['number']}: {item['title'][:50]}...")
-                            try:
-                                await self._reconcile_item(session, forum, repo, item, True, ctx, total_prs, repo_name)
-                            except Exception as e:
-                                print(f"❌ Error reconciling PR {item.get('number')}: {e}")
-                        page += 1
-                        await asyncio.sleep(1)
-                    if not prs_failed and ctx:
-                        await ctx.send(f"✅ Processed {total_prs} PRs for {repo}")
-                    print(f"✅ PRs processing complete for {repo}: {total_prs} processed")
-                else:
-                    if ctx:
-                        await ctx.send(f"⚠️ PRs forum not configured (prs_forum_id: {prs_forum_id}), skipping PRs for {repo}")
-                    prs_failed = True
+                # Process issues
+                await self._reconcile_repo_items(session, repo, repo_name, False, ctx)
+
+                # Process PRs
+                await self._reconcile_repo_items(session, repo, repo_name, True, ctx)
 
         print("🎉 Reconciliation process finished!")
+        if ctx:
+            await ctx.send("✅ Reconciliation complete.")
+
+    async def _reconcile_repo_items(self, session, repo, repo_name, is_pr, ctx):
+        """Reconcile issues or PRs for a repository with proper error handling and cleanup."""
+        item_type = "PRs" if is_pr else "issues"
+        endpoint = "pulls" if is_pr else "issues"
+        forum_id = await (self.cog.config.prs_forum_id() if is_pr else self.cog.config.issues_forum_id())
+
+        print(f"📋 {item_type} forum ID: {forum_id}")
+        forum = self.cog.bot.get_channel(forum_id)
+
+        if not forum:
+            print(f"⚠️ {item_type} forum not configured (forum_id: {forum_id})")
+            if ctx:
+                await ctx.send(f"⚠️ {item_type} forum not configured, skipping {item_type.lower()} for {repo}")
+            return
+
+        print(f"✅ {item_type} forum found: {forum.name} ({forum.id})")
+
+        # Collect all GitHub items
+        github_items = {}
+        page = 1
+        max_pages = 50
+        total_items = 0
+
+        while page <= max_pages:
+            url = f"https://api.github.com/repos/{repo}/{endpoint}?state=all&per_page=100&page={page}"
+            print(f"🌐 Fetching {item_type.lower()} page {page} for {repo}")
+
+            try:
+                async with session.get(url) as resp:
+                    print(f"📡 {item_type} API response: {resp.status}")
+
+                    if resp.status == 404:
+                        print(f"❌ Repository '{repo}' not found (404)")
+                        if ctx:
+                            await ctx.send(f"❌ Repository '{repo}' not found. Please check the repository name.")
+                        return
+                    elif resp.status == 403:
+                        print(f"🚫 Access forbidden to '{repo}' (403)")
+                        if ctx:
+                            await ctx.send(f"🚫 Cannot access '{repo}'. Check token permissions.")
+                        return
+                    elif resp.status != 200:
+                        print(f"⚠️ Unexpected response {resp.status} for {repo}")
+                        if ctx:
+                            await ctx.send(f"⚠️ Failed to fetch {item_type.lower()} for '{repo}' (status: {resp.status})")
+                        return
+
+                    data = await resp.json()
+                    print(f"📦 {item_type} data received: {len(data)} items")
+
+                    if len(data) == 0:
+                        break
+
+                    for item in data:
+                        # Filter out PRs from issues endpoint
+                        if not is_pr and item.get("pull_request"):
+                            print(f"⏭️ Skipping PR in issues: {item['number']}")
+                            continue
+
+                        number = item["number"]
+                        github_items[number] = item
+                        total_items += 1
+
+                        print(f"📝 Processing {item_type.lower()[:-1]} {number}: {item['title'][:50]}...")
+                        try:
+                            await self._reconcile_item(session, forum, repo, item, is_pr, ctx, total_items, repo_name)
+                        except Exception as e:
+                            print(f"❌ Error reconciling {item_type.lower()[:-1]} {number}: {e}")
+
+            except Exception as e:
+                print(f"❌ Exception fetching {item_type.lower()} for {repo}: {e}")
+                if ctx:
+                    await ctx.send(f"⚠️ Failed to fetch {item_type.lower()} for {repo}: {e}")
+                return
+
+            page += 1
+            await asyncio.sleep(1)  # rate limit
+
+        print(f"✅ {item_type} processing complete for {repo}: {total_items} processed")
+        if ctx:
+            await ctx.send(f"✅ Processed {total_items} {item_type.lower()} for {repo}")
+
+        # Clean up orphaned threads (threads that exist but shouldn't)
+        await self._cleanup_orphaned_threads(forum, repo, github_items, is_pr)
+
+    async def _cleanup_orphaned_threads(self, forum, repo, github_items, is_pr):
+        """Clean up threads that exist in forum but don't have corresponding GitHub items."""
+        item_type = "PRs" if is_pr else "issues"
+        print(f"🧹 Checking for orphaned {item_type.lower()} threads in {forum.name}...")
+
+        # Get all threads in the forum
+        all_threads = []
+        orphaned_count = 0
+
+        # Check active threads
+        try:
+            for thread in forum.threads:
+                all_threads.append(thread)
+        except (TypeError, AttributeError):
+            pass  # Handle mock objects in tests
+
+        # Check archived threads (limit to avoid excessive API calls)
+        if hasattr(forum, "archived_threads"):
+            try:
+                async for thread in forum.archived_threads(limit=100):  # Reasonable limit
+                    all_threads.append(thread)
+            except (TypeError, AttributeError):
+                pass  # Handle mock objects in tests
+
+        # Check each thread to see if it corresponds to a GitHub item
+        for thread in all_threads:
+            try:
+                # Extract issue/PR number from thread name
+                import re
+                match = re.search(r'「#(\d+)」', thread.name)
+                if not match:
+                    continue
+
+                number = int(match.group(1))
+
+                # Check if this thread corresponds to our repository
+                # Look for the repo tag or check thread content
+                repo_tag_found = False
+                if hasattr(thread, 'applied_tags') and thread.applied_tags:
+                    for tag in thread.applied_tags:
+                        if hasattr(tag, 'name') and tag.name.lower() == repo.split('/')[-1].lower():
+                            repo_tag_found = True
+                            break
+
+                if not repo_tag_found:
+                    continue  # This thread is for a different repo
+
+                # Check if GitHub item still exists
+                if number not in github_items:
+                    orphaned_count += 1
+                    print(f"🗑️ Found orphaned {item_type.lower()[:-1]} thread: #{number} - {thread.name[:50]}...")
+
+                    # Try to delete the orphaned thread
+                    try:
+                        await thread.delete()
+                        print(f"✅ Deleted orphaned thread #{number}")
+                    except discord.Forbidden:
+                        print(f"⚠️ Cannot delete thread #{number}: Missing permissions")
+                    except discord.NotFound:
+                        print(f"ℹ️ Thread #{number} already deleted or not found")
+                    except Exception as e:
+                        print(f"⚠️ Failed to delete orphaned thread #{number}: {e}")
+
+            except Exception as e:
+                print(f"⚠️ Error checking thread {getattr(thread, 'name', 'unknown')}: {e}")
+                continue
+
+        if orphaned_count > 0:
+            print(f"🧹 Cleaned up {orphaned_count} orphaned {item_type.lower()} threads")
+        else:
+            print(f"✅ No orphaned {item_type.lower()} threads found")
