@@ -34,6 +34,11 @@ class ConfigCommands(commands.Cog):
         await self._set_config(ctx, "github_secret", secret)
 
     @genhub.command()
+    async def token(self, ctx, token: str):
+        """Set the GitHub token for API access."""
+        await self._set_config(ctx, "github_token", token)
+
+    @genhub.command()
     async def addrepo(self, ctx, repo: str):
         """Add an allowed repository (e.g., owner/repo)."""
         repo = repo.strip().lstrip("/")
@@ -93,6 +98,12 @@ class ConfigCommands(commands.Cog):
         await ctx.send("🔄 Starting reconciliation... this may take a while.")
         await self.cog.handlers.reconcile_forum_tags(ctx, repo_filter=repo)
         await ctx.send("✅ Reconciliation complete.")
+
+    @genhub.command()
+    async def clearcache(self, ctx):
+        """Clear the thread cache to force fresh thread lookups."""
+        self.cog.thread_cache.clear()
+        await ctx.send("✅ Thread cache cleared. Next reconcile will do fresh lookups.")
 
     @genhub.command()
     async def showconfig(self, ctx):
