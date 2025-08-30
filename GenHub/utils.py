@@ -134,31 +134,36 @@ async def find_thread(bot, forum_id, repo_full_name, topic_number, thread_cache)
     if not forum:
         return None
 
-    pattern = rf"「#{topic_number}」(?:\D|$)"
+    # Try patterns: first with brackets, then without
+    patterns = [
+        rf"「#{topic_number}」(?:\D|$)",
+        rf"#{topic_number}(?:\D|$)",
+    ]
 
-    threads_attr = getattr(forum, "threads", [])
-    # Some tests hand us a Mock for threads which is not iterable; guard it.
-    try:
-        iterable_threads = list(threads_attr) if threads_attr else []
-    except TypeError:
-        iterable_threads = []
-
-    for thread in iterable_threads:
+    for pattern in patterns:
+        threads_attr = getattr(forum, "threads", [])
+        # Some tests hand us a Mock for threads which is not iterable; guard it.
         try:
-            if re.match(pattern, thread.name):
-                # Normalize to tuple keys; store the thread object
-                thread_cache[(forum_id, repo_full_name, topic_number)] = thread
-                thread_cache[(str(forum_id), repo_full_name, topic_number)] = thread
-                return thread
-        except Exception:
-            continue
+            iterable_threads = list(threads_attr) if threads_attr else []
+        except TypeError:
+            iterable_threads = []
 
-    if hasattr(forum, "archived_threads"):
-        async for thread in forum.archived_threads(limit=None):
-            if re.match(pattern, thread.name):
-                thread_cache[(forum_id, repo_full_name, topic_number)] = thread
-                thread_cache[(str(forum_id), repo_full_name, topic_number)] = thread
-                return thread
+        for thread in iterable_threads:
+            try:
+                if re.match(pattern, thread.name):
+                    # Normalize to tuple keys; store the thread object
+                    thread_cache[(forum_id, repo_full_name, topic_number)] = thread
+                    thread_cache[(str(forum_id), repo_full_name, topic_number)] = thread
+                    return thread
+            except Exception:
+                continue
+
+        if hasattr(forum, "archived_threads"):
+            async for thread in forum.archived_threads(limit=None):
+                if re.match(pattern, thread.name):
+                    thread_cache[(forum_id, repo_full_name, topic_number)] = thread
+                    thread_cache[(str(forum_id), repo_full_name, topic_number)] = thread
+                    return thread
 
     return None
 
@@ -169,6 +174,13 @@ async def get_or_create_thread(
     # First try to find an existing thread
     existing = await find_thread(bot, forum_id, repo_full_name, number, thread_cache)
     if existing:
+        # Update name if it doesn't have brackets
+        if hasattr(existing, 'name') and not existing.name.startswith(f"「#{number}」"):
+            new_name = f"「#{number}」{title}"
+            try:
+                await existing.edit(name=new_name)
+            except Exception:
+                pass  # ignore if can't edit
         return existing, False
 
     forum = bot.get_channel(forum_id)
