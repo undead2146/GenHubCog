@@ -271,7 +271,10 @@ class GitHubEventHandlers:
             self.cog.bot, forum_id, repo, number, title, url, tags, self.cog.thread_cache
         )
         if not thread:
+            print(f"❌ Failed to get or create thread for {repo}#{number}")
             return
+
+        print(f"{'✅ Created' if created else '📝 Found existing'} thread for {repo}#{number}")
 
         if created:
             # Newly created → send initial message

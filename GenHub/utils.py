@@ -185,7 +185,7 @@ async def find_thread(bot, forum_id, repo_full_name, topic_number, thread_cache)
 
         if hasattr(forum, "archived_threads"):
             try:
-                async for thread in forum.archived_threads(limit=None):
+                async for thread in forum.archived_threads(limit=100):  # Limit to avoid excessive API calls
                     if re.match(pattern, thread.name):
                         # Additional validation for archived threads
                         try:
@@ -209,26 +209,39 @@ async def get_or_create_thread(
     # First try to find an existing thread
     existing = await find_thread(bot, forum_id, repo_full_name, number, thread_cache)
     if existing:
-        # Validate that the thread is still accessible
+        # Validate that the thread is still accessible and not archived
         try:
             if hasattr(existing, 'name'):
                 _ = existing.name  # Quick validation
-            # Update name if it doesn't match the expected
-            expected_name = f"「#{number}」{title}"
-            if hasattr(existing, 'name') and existing.name != expected_name:
-                try:
-                    await existing.edit(name=expected_name)
-                except (discord.Forbidden, discord.NotFound):
-                    # If we can't edit, the thread might be deleted or we lack permissions
-                    # Remove from cache and treat as not found
-                    keys_to_remove = [
-                        (forum_id, repo_full_name, number),
-                        (str(forum_id), repo_full_name, number),
-                        f"{forum_id}:{repo_full_name}:{number}",
-                    ]
-                    for key in keys_to_remove:
-                        thread_cache.pop(key, None)
-                    existing = None  # Force recreation
+            # Check if thread is archived - if so, recreate as active for reconcile
+            if hasattr(existing, 'archived') and existing.archived:
+                print(f"ℹ️ Found archived thread #{number}, recreating as active")
+                # Remove from cache and treat as not found to force recreation
+                keys_to_remove = [
+                    (forum_id, repo_full_name, number),
+                    (str(forum_id), repo_full_name, number),
+                    f"{forum_id}:{repo_full_name}:{number}",
+                ]
+                for key in keys_to_remove:
+                    thread_cache.pop(key, None)
+                existing = None  # Force recreation
+            else:
+                # Update name if it doesn't match the expected
+                expected_name = f"「#{number}」{title}"
+                if hasattr(existing, 'name') and existing.name != expected_name:
+                    try:
+                        await existing.edit(name=expected_name)
+                    except (discord.Forbidden, discord.NotFound):
+                        # If we can't edit, the thread might be deleted or we lack permissions
+                        # Remove from cache and treat as not found
+                        keys_to_remove = [
+                            (forum_id, repo_full_name, number),
+                            (str(forum_id), repo_full_name, number),
+                            f"{forum_id}:{repo_full_name}:{number}",
+                        ]
+                        for key in keys_to_remove:
+                            thread_cache.pop(key, None)
+                        existing = None  # Force recreation
         except (discord.NotFound, discord.Forbidden, AttributeError):
             # Thread is deleted or inaccessible, remove from cache
             keys_to_remove = [
