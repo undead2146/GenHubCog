@@ -106,6 +106,47 @@ class ConfigCommands(commands.Cog):
         await ctx.send("✅ Thread cache cleared. Next reconcile will do fresh lookups.")
 
     @genhub.command()
+    async def testrepo(self, ctx, repo: str):
+        """Test access to a GitHub repository."""
+        import aiohttp
+        import os
+
+        repo = repo.strip().lstrip("/")
+        token = os.environ.get("GENHUB_GITHUB_TOKEN") or await self.cog.config.github_token()
+
+        if not token:
+            await ctx.send("❌ No GitHub token configured. Use `!genhub token <token>` to set one.")
+            return
+
+        headers = {"Accept": "application/vnd.github+json", "Authorization": f"Bearer {token}"}
+
+        try:
+            async with aiohttp.ClientSession(headers=headers) as session:
+                url = f"https://api.github.com/repos/{repo}"
+                async with session.get(url) as resp:
+                    if resp.status == 200:
+                        data = await resp.json()
+                        await ctx.send(f"✅ Repository '{repo}' is accessible!\n"
+                                     f"**Owner:** {data.get('owner', {}).get('login', 'Unknown')}\n"
+                                     f"**Private:** {data.get('private', 'Unknown')}\n"
+                                     f"**Description:** {data.get('description', 'No description')[:100]}")
+                    elif resp.status == 404:
+                        await ctx.send(f"❌ Repository '{repo}' not found. Check the repository name.")
+                    elif resp.status == 403:
+                        await ctx.send(f"🚫 Cannot access '{repo}'. This could be because:\n"
+                                     f"• The repository is private and your token lacks access\n"
+                                     f"• Your GitHub token doesn't have the required permissions\n"
+                                     f"• Check your token at: https://github.com/settings/tokens")
+                    elif resp.status == 401:
+                        await ctx.send(f"🚫 GitHub authentication failed. Your token may be invalid or expired.\n"
+                                     f"• Use `!genhub token <your_token>` to set a new token\n"
+                                     f"• Generate a token at: https://github.com/settings/tokens")
+                    else:
+                        await ctx.send(f"⚠️ Unexpected response ({resp.status}) when testing '{repo}'")
+        except Exception as e:
+            await ctx.send(f"❌ Error testing repository access: {e}")
+
+    @genhub.command()
     async def showconfig(self, ctx):
         """Show the current GenHub configuration."""
         config = await self.cog.config.all()

@@ -380,7 +380,7 @@ async def test_reconcile_repo_filter_and_bad_status(monkeypatch):
 
     # Fake forum with one thread
     thread = AsyncMock()
-    thread.name = "「#1」Test"
+    thread.name = "[GH] [#1] Test"
     msg = Mock()
     msg.content = "https://github.com/owner/repo/issues/1"
     async def fake_history(limit, oldest_first):

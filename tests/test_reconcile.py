@@ -21,7 +21,7 @@ async def test_reconcile_forum_tags_updates_thread_tags():
     mock_tag.name = "Closed"
 
     mock_thread = AsyncMock()
-    mock_thread.name = "「repo#1」Test Issue"  # Updated to include repo name
+    mock_thread.name = "[GH] [#1] Test Issue"  # Updated to include repo name
     mock_thread.applied_tags = [mock_tag]  # Different tag to trigger update
     mock_thread.edit = AsyncMock()
 
@@ -113,7 +113,7 @@ async def test_reconcile_creates_missing_thread():
     from tests.utils import make_fake_forum_with_threads
 
     mock_thread = AsyncMock()
-    mock_thread.name = "「repo#1」Test Issue"  # Updated to include repo name
+    mock_thread.name = "[GH] [#1] Test Issue"  # Updated to include repo name
     mock_thread.applied_tags = []
     mock_thread.edit = AsyncMock()
     mock_thread.guild = Mock()

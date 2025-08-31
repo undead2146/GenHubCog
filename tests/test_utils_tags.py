@@ -78,12 +78,12 @@ async def test_find_thread_active_and_archived():
     forum.create_tag = AsyncMock(side_effect=lambda name, moderated=False: SimpleNamespace(name=name))
 
     # Active thread
-    t = SimpleNamespace(name="「#5」Title", applied_tags=[SimpleNamespace(name="repo")], id=123)
+    t = SimpleNamespace(name="[GH] [#5] Title", applied_tags=[SimpleNamespace(name="repo")], id=123)
     forum.threads = [t]
 
     # async generator for archived threads
     async def fake_archived_threads(limit=None):
-        yield SimpleNamespace(name="「#6」Title", applied_tags=[SimpleNamespace(name="repo")], id=456)
+        yield SimpleNamespace(name="[GH] [#6] Title", applied_tags=[SimpleNamespace(name="repo")], id=456)
 
     forum.archived_threads = fake_archived_threads
     bot.get_channel = Mock(return_value=forum)

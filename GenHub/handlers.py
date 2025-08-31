@@ -436,7 +436,19 @@ class GitHubEventHandlers:
                     elif resp.status == 403:
                         print(f"🚫 Access forbidden to '{repo}' (403)")
                         if ctx:
-                            await ctx.send(f"🚫 Cannot access '{repo}'. Check token permissions.")
+                            await ctx.send(f"🚫 Cannot access '{repo}'. This could be because:\n"
+                                         f"• The repository is private and your token lacks access\n"
+                                         f"• Your GitHub token doesn't have the required permissions\n"
+                                         f"• The repository doesn't exist\n"
+                                         f"• Check your token at: https://github.com/settings/tokens")
+                        return
+                    elif resp.status == 401:
+                        print(f"🚫 Authentication failed for '{repo}' (401)")
+                        if ctx:
+                            await ctx.send(f"🚫 GitHub authentication failed. Please check your token:\n"
+                                         f"• Use `!genhub token <your_token>` to set a new token\n"
+                                         f"• Or set the `GENHUB_GITHUB_TOKEN` environment variable\n"
+                                         f"• Generate a token at: https://github.com/settings/tokens")
                         return
                     elif resp.status != 200:
                         print(f"⚠️ Unexpected response {resp.status} for {repo}")
@@ -511,7 +523,7 @@ class GitHubEventHandlers:
             try:
                 # Extract issue/PR number from thread name
                 import re
-                match = re.search(r'「#(\d+)」', thread.name)
+                match = re.search(r'\[GH\]\s*\[#(\d+)\]', thread.name)
                 if not match:
                     continue
 

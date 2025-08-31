@@ -67,7 +67,7 @@ async def test_find_thread_archived_found():
     tag.name = "repo"
     forum.available_tags = [tag]
     t = Mock()
-    t.name = "「#1」Test"
+    t.name = "[GH] [#1] Test"
     t.applied_tags = [tag]
     async def fake_archived_threads(limit=None):
         yield t

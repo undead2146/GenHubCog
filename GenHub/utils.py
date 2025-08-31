@@ -140,9 +140,10 @@ async def find_thread(bot, forum_id, repo_full_name, topic_number, thread_cache)
     # Get repository short name for pattern matching
     repo_short_name = repo_full_name.split('/')[-1]
 
-    # Try patterns: first with repo name and brackets, then with repo name and #, then just number
+    # Try patterns: first with new format, then legacy patterns for backward compatibility
     patterns = [
-        rf"「{re.escape(repo_short_name)}#{topic_number}」(?:\D|$)",
+        rf"\[GH\] \[#{topic_number}\](?:\s|$)",  # New format: [GH] [#NUMBER]
+        rf"「{re.escape(repo_short_name)}#{topic_number}」(?:\D|$)",  # Old format with corner brackets
         rf"{re.escape(repo_short_name)}#{topic_number}(?:\D|$)",
         rf"「#{topic_number}」(?:\D|$)",  # Legacy pattern for backward compatibility
         rf"#{topic_number}(?:\D|$)",
@@ -213,16 +214,30 @@ async def get_or_create_thread(
                 thread_cache.pop(key, None)
             existing = None  # Force recreation
         else:
-            # Validate thread is still accessible
+            # Validate thread is still accessible with more robust checks
             try:
-                # Try to access thread properties to ensure it's still valid
+                # First check if the thread object is still valid by accessing basic properties
                 _ = existing.id  # This should always work for valid threads
+
+                # Try to access the channel property to ensure the thread still exists
+                if hasattr(existing, 'channel'):
+                    _ = existing.channel
+
                 # For real Discord threads, also check name, but be lenient for test mocks
                 if hasattr(existing, 'name'):
                     _ = existing.name
+
+                # Additional validation: try to get thread history (this will fail if deleted)
+                try:
+                    async for message in existing.history(limit=1):
+                        break  # Just check if we can iterate, don't need the message
+                except (discord.NotFound, discord.Forbidden):
+                    # Thread is deleted or inaccessible
+                    raise discord.NotFound("Thread history inaccessible")
+
                 # Update name if it doesn't match the expected
                 repo_short_name = repo_full_name.split('/')[-1]
-                expected_name = f"「{repo_short_name}#{number}」{title}"
+                expected_name = f"[GH] [#{number}] {title}"
                 if hasattr(existing, 'name') and existing.name != expected_name:
                     try:
                         await existing.edit(name=expected_name)
@@ -274,7 +289,7 @@ async def get_or_create_thread(
 
     # Create thread name with repository to avoid conflicts
     repo_short_name = repo_full_name.split('/')[-1]
-    thread_name = f"「{repo_short_name}#{number}」{title}"
+    thread_name = f"[GH] [#{number}] {title}"
 
     print(f"🔄 Creating new thread for {repo_full_name}#{number}")
     try:
