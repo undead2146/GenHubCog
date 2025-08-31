@@ -369,7 +369,19 @@ class GitHubEventHandlers:
                         elif resp.status == 403:
                             print(f"🚫 Cannot access repository '{repo}' (private or no permission)")
                             if ctx:
-                                await ctx.send(f"🚫 Cannot access '{repo}'. Repository may be private or token lacks permission.")
+                                await ctx.send(f"🚫 Cannot access '{repo}'. This could be because:\n"
+                                             f"• The repository is private and your token lacks access\n"
+                                             f"• Your GitHub token doesn't have the required permissions\n"
+                                             f"• The repository doesn't exist\n"
+                                             f"• Check your token at: https://github.com/settings/tokens")
+                            repo_accessible = False
+                        elif resp.status == 401:
+                            print(f"🚫 Authentication failed for '{repo}' (401)")
+                            if ctx:
+                                await ctx.send(f"🚫 GitHub authentication failed. Please check your token:\n"
+                                             f"• Use `!genhub token <your_token>` to set a new token\n"
+                                             f"• Or set the `GENHUB_GITHUB_TOKEN` environment variable\n"
+                                             f"• Generate a token at: https://github.com/settings/tokens")
                             repo_accessible = False
                         elif resp.status != 200:
                             print(f"⚠️ Unexpected response {resp.status} when checking repository {repo}")
