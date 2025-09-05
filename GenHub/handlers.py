@@ -257,8 +257,8 @@ class GitHubEventHandlers:
 
             if entry["comments"]:
                 for i, (body, url) in enumerate(reversed(entry["comments"])):
-                    # Only include role mention in the first comment to avoid spam
-                    mention = role_mention if i == 0 else ""
+                    # Only include role mention if there's no review body (to avoid double mention)
+                    mention = role_mention if i == 0 and not entry["body"] else ""
                     prefix = f"💬 **PR review comment** by **{entry['author']}** {mention} → [View Comment]({url})\n"
                     await send_message(thread, body, prefix=prefix)
 
