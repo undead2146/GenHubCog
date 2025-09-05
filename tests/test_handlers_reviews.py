@@ -116,4 +116,4 @@ async def test_pull_request_review_comment_flushes_message():
         args, kwargs = mock_send.await_args
         body = args[1]
         prefix = kwargs.get("prefix", "")
-        assert "review comment" in prefix.lower() or "Please fix" in body
+        assert "review comment" in prefix.lower() or "review comments" in prefix.lower() or "Please fix" in body
