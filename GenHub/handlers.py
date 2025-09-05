@@ -256,20 +256,11 @@ class GitHubEventHandlers:
                 await send_message(thread, entry["body"], prefix=prefix)
 
             if entry["comments"]:
-                num_comments = len(entry["comments"])
-                if num_comments <= 5:
-                    # Show all comments individually but batched
-                    comments_text = ""
-                    for i, (body, url) in enumerate(reversed(entry["comments"]), 1):
-                        comments_text += f"\n--- Comment {i} ---\n{body}\n[View Comment]({url})\n"
-                    
-                    prefix = f"💬 **PR review comments** by **{entry['author']}** {role_mention} ({num_comments} total)\n"
-                    await send_message(thread, comments_text.strip(), prefix=prefix)
-                else:
-                    # Too many comments, send summary
-                    prefix = f"💬 **PR review submitted** by **{entry['author']}** {role_mention} with {num_comments} comments → [View Review]({entry['url']})\n"
-                    summary = f"Review contains {num_comments} comments. Click the link above to view them on GitHub."
-                    await send_message(thread, summary, prefix=prefix)
+                for i, (body, url) in enumerate(reversed(entry["comments"])):
+                    # Only include role mention in the first comment to avoid spam
+                    mention = role_mention if i == 0 else ""
+                    prefix = f"💬 **PR review comment** by **{entry['author']}** {mention} → [View Comment]({url})\n"
+                    await send_message(thread, body, prefix=prefix)
 
         if key in self.pending_reviews and "task" in self.pending_reviews[key]:
             self.pending_reviews[key]["task"].cancel()
