@@ -87,13 +87,13 @@ class ConfigCommands(commands.Cog):
 
     @genhub.command()
     async def contributorrole(self, ctx, role_id: int):
-        """Set the Contributor role ID for mentions in feed messages."""
+        """Set the Contributor role ID for mentions."""
         await self._set_config(ctx, "contributor_role_id", role_id)
 
     @genhub.command()
     @commands.is_owner()
     async def reconcile(self, ctx, repo: str = None):
-        """Reconcile all forum posts to ensure correct tags are applied.
+        """Reconcile all forum posts to ensure correct tags.
         Optionally filter by repo name."""
         await ctx.send("🔄 Starting reconciliation... this may take a while.")
         await self.cog.handlers.reconcile_forum_tags(ctx, repo_filter=repo)
@@ -101,7 +101,7 @@ class ConfigCommands(commands.Cog):
 
     @genhub.command()
     async def clearcache(self, ctx):
-        """Clear the thread cache to force fresh thread lookups."""
+        """Clear the thread cache for fresh lookups."""
         self.cog.thread_cache.clear()
         await ctx.send("✅ Thread cache cleared. Next reconcile will do fresh lookups.")
 
@@ -112,13 +112,13 @@ class ConfigCommands(commands.Cog):
         import os
 
         repo = repo.strip().lstrip("/")
-        token = os.environ.get("GENHUB_GITHUB_TOKEN") or await self.cog.config.github_token()
+        token = await self.cog.config.github_token()
 
         if not token:
             await ctx.send("❌ No GitHub token configured. Use `!genhub token <token>` to set one.")
             return
 
-        headers = {"Accept": "application/vnd.github+json", "Authorization": f"Bearer {token}"}
+        headers = {"Accept": "application/vnd.github.v3+json", "Authorization": f"token {token}"}
 
         try:
             async with aiohttp.ClientSession(headers=headers) as session:
@@ -150,7 +150,7 @@ class ConfigCommands(commands.Cog):
     async def showconfig(self, ctx):
         """Show the current GenHub configuration."""
         config = await self.cog.config.all()
-        token_status = "✅ Set via GENHUB_GITHUB_TOKEN environment variable" if os.environ.get("GENHUB_GITHUB_TOKEN") else ("✅ Set in config" if config['github_token'] else "❌ Not set")
+        token_status = "✅ Set in config" if config['github_token'] else "❌ Not set"
         message = (
             "📌 **GenHub Configuration** 📌\n"
             f"**Webhook Host:** {config['webhook_host']}\n"

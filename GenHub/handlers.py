@@ -332,13 +332,13 @@ class GitHubEventHandlers:
     async def reconcile_forum_tags(self, ctx=None, repo_filter: str = None):
         allowed_repos = await self.cog.config.allowed_repos()
         print(f"🔍 Starting reconcile. Allowed repos: {allowed_repos}")
-        # Get token from environment variable, fallback to config
-        token = os.environ.get("GENHUB_GITHUB_TOKEN") or await self.cog.config.github_token()
-        print(f"🔑 Token source: {'ENV' if os.environ.get('GENHUB_GITHUB_TOKEN') else 'CONFIG'}")
-        headers = {"Accept": "application/vnd.github+json"}
+        # Get token from config only
+        token = await self.cog.config.github_token()
+        print(f"🔑 Token source: CONFIG")
+        headers = {"Accept": "application/vnd.github.v3+json"}
         if token:
-            headers["Authorization"] = f"Bearer {token}"
-            print("✅ Token set in headers")
+            headers["Authorization"] = f"token {token}"
+            print("✅ Token set in headers (using 'token' auth scheme)")
         else:
             print("❌ No token available")
 
