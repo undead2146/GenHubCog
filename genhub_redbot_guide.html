@@ -366,11 +366,12 @@
       margin-bottom: 10px;
     }
 
+    /* 1-Click Copyable Code Blocks */
     .code-block {
       background: #10121a;
       border: 1px solid rgba(255, 255, 255, 0.08);
       border-radius: 8px;
-      padding: 10px 14px;
+      padding: 12px 16px;
       display: flex;
       align-items: center;
       justify-content: space-between;
@@ -378,6 +379,106 @@
       font-size: 13px;
       color: #00b0f4;
       margin-top: 6px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      position: relative;
+    }
+
+    .code-block:hover {
+      border-color: var(--accent-primary);
+      background: #151824;
+    }
+
+    .copy-hint {
+      font-size: 11px;
+      color: var(--text-muted);
+      background: rgba(255, 255, 255, 0.05);
+      padding: 4px 8px;
+      border-radius: 4px;
+      pointer-events: none;
+      transition: all 0.2s;
+    }
+
+    .code-block:hover .copy-hint {
+      color: #fff;
+      background: var(--accent-primary);
+    }
+
+    /* Interactive Command Generator */
+    .generator-card {
+      background: linear-gradient(135deg, rgba(88, 101, 242, 0.1) 0%, rgba(0, 176, 244, 0.05) 100%);
+      border: 1px solid rgba(88, 101, 242, 0.3);
+      border-radius: var(--radius);
+      padding: 24px;
+      margin-bottom: 24px;
+    }
+
+    .generator-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 14px;
+      margin-bottom: 18px;
+    }
+
+    .input-group label {
+      display: block;
+      font-size: 12px;
+      font-weight: 600;
+      color: #dbdee1;
+      margin-bottom: 6px;
+    }
+
+    .input-group input {
+      width: 100%;
+      background: #0d0f15;
+      border: 1px solid var(--border-color);
+      color: #fff;
+      padding: 10px 12px;
+      border-radius: 8px;
+      font-size: 13px;
+      outline: none;
+      font-family: inherit;
+      transition: border-color 0.2s;
+    }
+
+    .input-group input:focus {
+      border-color: var(--accent-primary);
+    }
+
+    .generated-box {
+      background: #0a0c12;
+      border: 1px solid rgba(88, 101, 242, 0.4);
+      border-radius: 8px;
+      padding: 14px 18px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .generated-text {
+      font-family: monospace;
+      font-size: 13.5px;
+      color: #23a55a;
+      word-break: break-all;
+    }
+
+    .btn-large {
+      background: var(--accent-primary);
+      color: #fff;
+      border: none;
+      padding: 10px 18px;
+      border-radius: 8px;
+      font-weight: 600;
+      font-size: 13px;
+      cursor: pointer;
+      transition: all 0.2s;
+      flex-shrink: 0;
+    }
+
+    .btn-large:hover {
+      background: #4752c4;
+      transform: translateY(-1px);
     }
 
     /* Discord Mockup Container */
@@ -623,7 +724,7 @@
       color: #c9cdfb;
       cursor: pointer;
       font-size: 11.5px;
-      padding: 4px 8px;
+      padding: 5px 10px;
       border-radius: 6px;
       transition: all 0.15s;
     }
@@ -633,69 +734,30 @@
       color: #fff;
     }
 
-    /* Architecture Diagram */
-    .flow-container {
-      background: var(--bg-card);
-      border: 1px solid var(--border-color);
-      border-radius: var(--radius);
-      padding: 24px;
-      margin-bottom: 24px;
-    }
-
-    .flow-steps {
+    /* Toast Notification */
+    .toast {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      background: var(--accent-green);
+      color: #fff;
+      padding: 12px 20px;
+      border-radius: 8px;
+      font-weight: 600;
+      font-size: 13.5px;
+      box-shadow: var(--shadow-lg);
+      transform: translateY(100px);
+      opacity: 0;
+      transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+      z-index: 1000;
       display: flex;
       align-items: center;
-      justify-content: space-between;
-      gap: 14px;
-      flex-wrap: wrap;
+      gap: 8px;
     }
 
-    .flow-step {
-      flex: 1;
-      min-width: 170px;
-      background: var(--bg-dark);
-      border: 1px solid var(--border-color);
-      padding: 16px;
-      border-radius: 10px;
-      text-align: center;
-      position: relative;
-    }
-
-    .flow-step .step-icon {
-      font-size: 22px;
-      margin-bottom: 6px;
-    }
-
-    .flow-step h4 {
-      font-size: 13.5px;
-      color: #fff;
-      margin-bottom: 4px;
-    }
-
-    .flow-step p {
-      font-size: 11px;
-      color: var(--text-muted);
-    }
-
-    .flow-arrow {
-      color: var(--accent-primary);
-      font-size: 18px;
-      font-weight: 700;
-    }
-
-    /* Rule callout box */
-    .rule-callout {
-      background: rgba(88, 101, 242, 0.08);
-      border: 1px solid rgba(88, 101, 242, 0.25);
-      border-left: 4px solid var(--accent-primary);
-      padding: 16px 20px;
-      border-radius: 8px;
-      margin-bottom: 24px;
-      font-size: 13.5px;
-    }
-
-    .rule-callout strong {
-      color: #fff;
+    .toast.show {
+      transform: translateY(0);
+      opacity: 1;
     }
 
     /* Diagnostic Box */
@@ -714,7 +776,6 @@
 
     .diag-box strong { color: #fff; }
     .diag-ok { color: var(--accent-green); }
-    .diag-warn { color: var(--accent-orange); }
 
     /* Responsive */
     @media (max-width: 900px) {
@@ -730,6 +791,11 @@
 </head>
 <body>
 
+  <!-- Toast Notification -->
+  <div id="toast" class="toast">
+    <span>✅</span> Copied command to clipboard!
+  </div>
+
   <!-- Sidebar Navigation -->
   <aside class="sidebar">
     <div class="brand">
@@ -743,7 +809,8 @@
     <div class="nav-section-title">Getting Started</div>
     <ul class="nav-links">
       <li><a href="#quick-install" class="nav-link active"><span>⚡</span> 3-Step Discord Install</a></li>
-      <li><a href="#channel-config" class="nav-link"><span>🛠️</span> Channel Setup</a></li>
+      <li><a href="#all-in-one-setup" class="nav-link"><span>🎯</span> 1-Line Setup Generator</a></li>
+      <li><a href="#channel-config" class="nav-link"><span>🛠️</span> Individual Channel Setup</a></li>
       <li><a href="#in-discord-diag" class="nav-link"><span>🔍</span> Diagnostics & Status</a></li>
       <li><a href="#updating-cog" class="nav-link"><span>🔄</span> Updating via Discord</a></li>
     </ul>
@@ -779,17 +846,17 @@
         <div class="stat-badge"><span>📦</span> Cog Version: <strong>v1.2.0 (Latest)</strong></div>
         <div class="stat-badge"><span>🤖</span> Target: <strong>RedBot 3.5.0+</strong></div>
         <div class="stat-badge"><span>🌐</span> Webhook Port: <strong>0.0.0.0:8080</strong></div>
-        <div class="stat-badge"><span>🛡️</span> Push Protection: <strong>Cleaned & Verified</strong></div>
+        <div class="stat-badge"><span>🎯</span> All-In-One Setup: <strong>!genhub setup</strong></div>
       </div>
     </div>
 
     <!-- 3-Step In-Discord Installation -->
     <section id="quick-install">
       <div class="section-header">
-        <h3>⚡ Option A: 3-Step In-Discord Installation (Recommended)</h3>
+        <h3>⚡ Option A: 3-Step In-Discord Installation (Zero Terminal Needed)</h3>
       </div>
       <p class="section-desc">
-        If you already have a RedBot instance running, you do not need terminal access. You can add the repository and install the cog directly inside Discord using standard Downloader commands.
+        Click any of the code boxes below to copy the command directly to your clipboard:
       </p>
 
       <div class="step-list">
@@ -797,10 +864,10 @@
           <div class="step-number">1</div>
           <div class="step-content">
             <h4>Add the GenHub Repository</h4>
-            <p>Tell your RedBot instance where to find the official GenHub Cog repository:</p>
-            <div class="code-block">
+            <p>Tell your RedBot Downloader where to find the official GenHub Cog:</p>
+            <div class="code-block" data-copy="!repo add genhubcog https://github.com/undead2146/GenHubCog">
               <span>!repo add genhubcog https://github.com/undead2146/GenHubCog</span>
-              <button class="copy-btn" data-copy="!repo add genhubcog https://github.com/undead2146/GenHubCog">📋 Copy</button>
+              <span class="copy-hint">📋 Click to Copy</span>
             </div>
           </div>
         </div>
@@ -810,9 +877,9 @@
           <div class="step-content">
             <h4>Install the Cog</h4>
             <p>Download and compile the cog package into your bot storage:</p>
-            <div class="code-block">
+            <div class="code-block" data-copy="!cog install genhubcog GenHub">
               <span>!cog install genhubcog GenHub</span>
-              <button class="copy-btn" data-copy="!cog install genhubcog GenHub">📋 Copy</button>
+              <span class="copy-hint">📋 Click to Copy</span>
             </div>
           </div>
         </div>
@@ -822,66 +889,129 @@
           <div class="step-content">
             <h4>Load the Cog</h4>
             <p>Activate the cog and start the internal webhook server:</p>
-            <div class="code-block">
+            <div class="code-block" data-copy="!load GenHub">
               <span>!load GenHub</span>
-              <button class="copy-btn" data-copy="!load GenHub">📋 Copy</button>
+              <span class="copy-hint">📋 Click to Copy</span>
             </div>
           </div>
         </div>
       </div>
     </section>
 
-    <!-- Channel Configuration -->
-    <section id="channel-config">
+    <!-- Interactive 1-Line Setup Generator -->
+    <section id="all-in-one-setup">
       <div class="section-header">
-        <h3>🛠️ Step-by-Step Channel Configuration in Discord</h3>
+        <h3>🎯 All-In-One Setup Command Generator</h3>
       </div>
       <p class="section-desc">
-        Right-click each channel in your Discord server (with <em>Developer Mode</em> turned on) to copy its ID, then execute these configuration commands:
+        Instead of running 6 separate commands, you can configure all your channels, roles, and repositories in <strong>ONE single command</strong>. Fill in the fields below to generate your custom command:
+      </p>
+
+      <div class="generator-card">
+        <div class="generator-grid">
+          <div class="input-group">
+            <label>1. Issues Forum Channel (# or ID)</label>
+            <input type="text" id="genIssues" value="#github-issues-feed" placeholder="#github-issues-feed">
+          </div>
+          <div class="input-group">
+            <label>2. PRs Forum Channel (# or ID)</label>
+            <input type="text" id="genPrs" value="#pull-requests-feed" placeholder="#pull-requests-feed">
+          </div>
+          <div class="input-group">
+            <label>3. Log/Chat Channel (# or ID)</label>
+            <input type="text" id="genLog" value="#genhub-chat" placeholder="#genhub-chat">
+          </div>
+          <div class="input-group">
+            <label>4. Contributor Role (@ or ID)</label>
+            <input type="text" id="genRole" value="@Contributor" placeholder="@Contributor">
+          </div>
+          <div class="input-group">
+            <label>5. GitHub Repository (owner/repo)</label>
+            <input type="text" id="genRepo" value="community-outpost/GenHub" placeholder="community-outpost/GenHub">
+          </div>
+        </div>
+
+        <div style="margin-bottom: 8px; font-size: 12px; color: #dbdee1; font-weight: 600;">
+          Generated Setup Command:
+        </div>
+        <div class="generated-box">
+          <div class="generated-text" id="generatedCmd">!genhub setup #github-issues-feed #pull-requests-feed #genhub-chat @Contributor community-outpost/GenHub</div>
+          <button class="btn-large" id="copyGenBtn">📋 Copy Command</button>
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-title"><span>🧙</span> Method B: Interactive Wizard in Discord</div>
+          <p>
+            You can also just type <code class="cmd">!genhub setup</code> with <strong>no arguments</strong>. The bot will guide you step-by-step in chat and ask for each channel!
+          </p>
+          <div class="code-block" data-copy="!genhub setup">
+            <span>!genhub setup</span>
+            <span class="copy-hint">📋 Click to Copy</span>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title"><span>📱</span> Method C: Visual Slash Command UI</div>
+          <p>
+            Type <code class="cmd">/genhubsetup</code> to open Discord's native dropdown channel pickers and configure everything with your mouse.
+          </p>
+          <div class="code-block" data-copy="/genhubsetup">
+            <span>/genhubsetup</span>
+            <span class="copy-hint">📋 Click to Copy</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Individual Channel Setup (Alternative) -->
+    <section id="channel-config">
+      <div class="section-header">
+        <h3>🛠️ Individual Channel Commands (Alternative)</h3>
+      </div>
+      <p class="section-desc">
+        If you prefer setting channels individually or need to change a single setting later:
       </p>
 
       <div class="grid-2">
         <div class="card">
-          <div class="card-title"><span>📁</span> 1. Set Forum Channels</div>
-          <p>Link your GitHub Issues forum and Pull Requests forum:</p>
-          <div class="code-block" style="margin-bottom:8px;">
+          <div class="card-title"><span>📁</span> Forum Channels</div>
+          <div class="code-block" data-copy="!genhub issuesforum ">
             <span>!genhub issuesforum &lt;issues_forum_id&gt;</span>
-            <button class="copy-btn" data-copy="!genhub issuesforum ">📋 Copy</button>
+            <span class="copy-hint">📋 Copy</span>
           </div>
-          <div class="code-block">
+          <div class="code-block" data-copy="!genhub prsforum ">
             <span>!genhub prsforum &lt;prs_forum_id&gt;</span>
-            <button class="copy-btn" data-copy="!genhub prsforum ">📋 Copy</button>
+            <span class="copy-hint">📋 Copy</span>
           </div>
         </div>
 
         <div class="card">
-          <div class="card-title"><span>🔔</span> 2. Set Log Channel & Roles</div>
-          <p>Configure bot error alerts and the role to mention on PR merges:</p>
-          <div class="code-block" style="margin-bottom:8px;">
+          <div class="card-title"><span>🔔</span> Log Channel & Role</div>
+          <div class="code-block" data-copy="!genhub logchannel ">
             <span>!genhub logchannel &lt;log_channel_id&gt;</span>
-            <button class="copy-btn" data-copy="!genhub logchannel ">📋 Copy</button>
+            <span class="copy-hint">📋 Copy</span>
           </div>
-          <div class="code-block">
+          <div class="code-block" data-copy="!genhub contributorrole ">
             <span>!genhub contributorrole &lt;role_id&gt;</span>
-            <button class="copy-btn" data-copy="!genhub contributorrole ">📋 Copy</button>
+            <span class="copy-hint">📋 Copy</span>
           </div>
         </div>
 
         <div class="card">
-          <div class="card-title"><span>🐙</span> 3. Add Tracked Repositories</div>
-          <p>Add the repositories that the bot is allowed to ingest webhooks for:</p>
-          <div class="code-block">
+          <div class="card-title"><span>🐙</span> Tracked Repositories</div>
+          <div class="code-block" data-copy="!genhub addrepo community-outpost/GenHub">
             <span>!genhub addrepo community-outpost/GenHub</span>
-            <button class="copy-btn" data-copy="!genhub addrepo community-outpost/GenHub">📋 Copy</button>
+            <span class="copy-hint">📋 Copy</span>
           </div>
         </div>
 
         <div class="card">
-          <div class="card-title"><span>🔑</span> 4. Add GitHub API Token</div>
-          <p>Personal access token used for rate-limited API queries and comment sync:</p>
-          <div class="code-block">
+          <div class="card-title"><span>🔑</span> GitHub API Token</div>
+          <div class="code-block" data-copy="!genhub token ">
             <span>!genhub token &lt;github_pat_token&gt;</span>
-            <button class="copy-btn" data-copy="!genhub token ">📋 Copy</button>
+            <span class="copy-hint">📋 Copy</span>
           </div>
         </div>
       </div>
@@ -899,9 +1029,9 @@
       <div class="card" style="margin-bottom: 20px;">
         <div class="card-title"><span>⚡</span> Built-in Diagnostic Command</div>
         <p>Type in Discord to execute an end-to-end health audit:</p>
-        <div class="code-block" style="max-width: 380px;">
+        <div class="code-block" data-copy="!genhub diag" style="max-width: 380px;">
           <span>!genhub diag</span>
-          <button class="copy-btn" data-copy="!genhub diag">📋 Copy</button>
+          <span class="copy-hint">📋 Click to Copy</span>
         </div>
         
         <div class="diag-box">
@@ -939,22 +1069,22 @@
         <div class="card">
           <div class="card-title"><span>📡</span> 1. Check for Updates</div>
           <p>Check if a newer version exists on GitHub:</p>
-          <div class="code-block">
+          <div class="code-block" data-copy="!cog checkforupdates">
             <span>!cog checkforupdates</span>
-            <button class="copy-btn" data-copy="!cog checkforupdates">📋 Copy</button>
+            <span class="copy-hint">📋 Copy</span>
           </div>
         </div>
 
         <div class="card">
           <div class="card-title"><span>🚀</span> 2. Apply Update & Reload</div>
           <p>Pull the latest version and reload the cog into memory:</p>
-          <div class="code-block" style="margin-bottom:8px;">
+          <div class="code-block" data-copy="!cog update GenHub" style="margin-bottom:8px;">
             <span>!cog update GenHub</span>
-            <button class="copy-btn" data-copy="!cog update GenHub">📋 Copy</button>
+            <span class="copy-hint">📋 Copy</span>
           </div>
-          <div class="code-block">
+          <div class="code-block" data-copy="!reload GenHub">
             <span>!reload GenHub</span>
-            <button class="copy-btn" data-copy="!reload GenHub">📋 Copy</button>
+            <span class="copy-hint">📋 Copy</span>
           </div>
         </div>
       </div>
@@ -971,7 +1101,7 @@
         <h3>⌨️ Complete GenHub Command Reference</h3>
       </div>
       <p class="section-desc">
-        Interactive table of all available commands. Click any command to copy it to your clipboard.
+        Interactive table of all available commands. Click any command or copy button to copy it.
       </p>
 
       <div class="command-box">
@@ -990,6 +1120,12 @@
               </tr>
             </thead>
             <tbody>
+              <tr>
+                <td><code class="cmd">!genhub setup</code></td>
+                <td><code>[#issues] [#prs] [#log] [@role] [repo]</code></td>
+                <td>All-in-one setup command to configure everything in 1 step or launch the wizard</td>
+                <td><button class="copy-btn" data-copy="!genhub setup">📋 Copy</button></td>
+              </tr>
               <tr>
                 <td><code class="cmd">!genhub diag</code></td>
                 <td>None</td>
@@ -1061,6 +1197,12 @@
                 <td>None</td>
                 <td>Clears in-memory thread cache to force fresh lookups</td>
                 <td><button class="copy-btn" data-copy="!genhub clearcache">📋 Copy</button></td>
+              </tr>
+              <tr>
+                <td><code class="cmd">/genhubsetup</code></td>
+                <td>Channel pickers</td>
+                <td>Interactive visual setup wizard with channel dropdown menus</td>
+                <td><button class="copy-btn" data-copy="/genhubsetup">📋 Copy</button></td>
               </tr>
               <tr>
                 <td><code class="cmd">/genhubconfig</code></td>
@@ -1184,6 +1326,73 @@
 
   <script>
     document.addEventListener('DOMContentLoaded', () => {
+      const toast = document.getElementById('toast');
+      let toastTimer = null;
+
+      function showToast(msg) {
+        if (toast) {
+          toast.innerHTML = '<span>✅</span> ' + msg;
+          toast.classList.add('show');
+          if (toastTimer) clearTimeout(toastTimer);
+          toastTimer = setTimeout(() => {
+            toast.classList.remove('show');
+          }, 2000);
+        }
+      }
+
+      function copyText(text) {
+        if (!text) return;
+        navigator.clipboard.writeText(text).then(() => {
+          showToast('Copied: "' + text.substring(0, 30) + (text.length > 30 ? '...' : '') + '"');
+        }).catch(err => {
+          console.error('Copy failed', err);
+        });
+      }
+
+      // 1. Dynamic Setup Command Generator
+      const genIssues = document.getElementById('genIssues');
+      const genPrs = document.getElementById('genPrs');
+      const genLog = document.getElementById('genLog');
+      const genRole = document.getElementById('genRole');
+      const genRepo = document.getElementById('genRepo');
+      const generatedCmd = document.getElementById('generatedCmd');
+      const copyGenBtn = document.getElementById('copyGenBtn');
+
+      function updateGeneratedCommand() {
+        const issues = (genIssues ? genIssues.value.trim() : '') || '#github-issues-feed';
+        const prs = (genPrs ? genPrs.value.trim() : '') || '#pull-requests-feed';
+        const log = (genLog ? genLog.value.trim() : '') || '#genhub-chat';
+        const role = (genRole ? genRole.value.trim() : '') || '@Contributor';
+        const repo = (genRepo ? genRepo.value.trim() : '') || 'community-outpost/GenHub';
+
+        const cmd = `!genhub setup ${issues} ${prs} ${log} ${role} ${repo}`;
+        if (generatedCmd) {
+          generatedCmd.innerText = cmd;
+        }
+      }
+
+      [genIssues, genPrs, genLog, genRole, genRepo].forEach(input => {
+        if (input) input.addEventListener('input', updateGeneratedCommand);
+      });
+
+      if (copyGenBtn) {
+        copyGenBtn.addEventListener('click', () => {
+          if (generatedCmd) copyText(generatedCmd.innerText);
+        });
+      }
+
+      // 2. Clickable Code Blocks & Copy Buttons
+      document.querySelectorAll('.code-block, .copy-btn').forEach(elem => {
+        elem.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const text = elem.getAttribute('data-copy');
+          if (text) {
+            copyText(text);
+          }
+        });
+      });
+
+      // 3. Search Filter in Table
       const searchInput = document.getElementById('cmdSearch');
       if (searchInput) {
         searchInput.addEventListener('input', () => {
@@ -1196,19 +1405,7 @@
         });
       }
 
-      document.querySelectorAll('.copy-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-          const text = btn.getAttribute('data-copy');
-          if (text) {
-            navigator.clipboard.writeText(text).then(() => {
-              const orig = btn.innerText;
-              btn.innerText = '✅ Copied!';
-              setTimeout(() => { btn.innerText = orig; }, 1500);
-            });
-          }
-        });
-      });
-
+      // 4. Smooth Nav Link Highlighting
       window.addEventListener('scroll', () => {
         const sections = document.querySelectorAll('section, div.hero, div.rule-callout');
         const navLinks = document.querySelectorAll('.nav-link');

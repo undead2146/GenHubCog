@@ -55,8 +55,23 @@ class GenHub(commands.Cog):
         # Register text commands cog
         await self.bot.add_cog(ConfigCommands(self))
 
-        # Register slash command
-        self.bot.tree.add_command(SlashCommands(self).config_command)
+        # Register slash commands
+        import discord
+        slash_handler = SlashCommands(self)
+        self.bot.tree.add_command(
+            discord.app_commands.Command(
+                name="genhubconfig",
+                description="Configure GenHub settings in one go",
+                callback=slash_handler.config_command,
+            )
+        )
+        self.bot.tree.add_command(
+            discord.app_commands.Command(
+                name="genhubsetup",
+                description="Visual all-in-one setup wizard with channel dropdowns",
+                callback=slash_handler.setup_slash_command,
+            )
+        )
 
     async def cog_unload(self):
         await self.webhook.stop()

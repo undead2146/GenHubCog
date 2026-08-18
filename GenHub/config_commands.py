@@ -6,17 +6,157 @@ class ConfigCommands(commands.Cog):
     """Owner-only text commands for configuring GenHub."""
 
     def __init__(self, parent_cog):
+        super().__init__()
         self.cog = parent_cog
+        self.genhub.cog = self
+        for c in getattr(self.genhub, "commands", []):
+            c.cog = self
 
     async def _set_config(self, ctx, key: str, value):
         await getattr(self.cog.config, key).set(value)
         await ctx.send(f"✅ {key.replace('_', ' ').title()} set to {value}")
+
+    def _resolve_channel_id(self, guild, text: str):
+        if not text:
+            return None
+        text = str(text).strip()
+        if text.lower() in ("skip", "none"):
+            return None
+        if text.startswith("<#") and text.endswith(">"):
+            text = text[2:-1]
+        if text.isdigit():
+            return int(text)
+        if guild:
+            for ch in guild.channels:
+                if ch.name.lower() == text.lower().lstrip("#"):
+                    return ch.id
+        return None
+
+    def _resolve_role_id(self, guild, text: str):
+        if not text:
+            return None
+        text = str(text).strip()
+        if text.lower() in ("skip", "none"):
+            return None
+        if text.startswith("<@&") and text.endswith(">"):
+            text = text[3:-1]
+        if text.isdigit():
+            return int(text)
+        if guild:
+            for r in guild.roles:
+                if r.name.lower() == text.lower().lstrip("@"):
+                    return r.id
+        return None
 
     @commands.group()
     @commands.is_owner()
     async def genhub(self, ctx):
         """GenHub configuration commands."""
         pass
+
+    @genhub.command(name="setup", aliases=["quicksetup", "configure"])
+    async def setup_command(
+        self,
+        ctx,
+        issues_forum: str = None,
+        prs_forum: str = None,
+        log_channel: str = None,
+        contributor_role: str = None,
+        repo: str = None,
+    ):
+        """Configure all GenHub channels & repos in ONE single command.
+        
+        Usage:
+          !genhub setup <#issues_forum> <#prs_forum> [<#log_channel>] [@role] [<owner/repo>]
+        Or run `!genhub setup` with no arguments for the interactive step-by-step wizard!
+        """
+        import asyncio
+
+        # If no arguments provided, run interactive wizard
+        if not issues_forum:
+            def check(m):
+                return m.author == ctx.author and m.channel == ctx.channel
+
+            await ctx.send("🚀 **Starting GenHub All-In-One Setup Wizard**\n"
+                           "*(You can mention channels `#channel`, paste IDs `141...`, or type `skip` at any step)*\n\n"
+                           "**Step 1/5:** Mention or paste the channel ID for the **GitHub Issues Forum** (`github-issues-feed`):")
+            try:
+                msg = await ctx.bot.wait_for("message", check=check, timeout=60)
+                issues_forum = msg.content.strip()
+            except asyncio.TimeoutError:
+                await ctx.send("⏱️ Setup wizard timed out.")
+                return
+
+            await ctx.send("**Step 2/5:** Mention or paste the channel ID for the **Pull Requests Forum** (`pull-requests-feed`):")
+            try:
+                msg = await ctx.bot.wait_for("message", check=check, timeout=60)
+                prs_forum = msg.content.strip()
+            except asyncio.TimeoutError:
+                await ctx.send("⏱️ Setup wizard timed out.")
+                return
+
+            await ctx.send("**Step 3/5:** Mention or paste the **Log / Bot Chat Channel** (`genhub-chat`), or type `skip`:")
+            try:
+                msg = await ctx.bot.wait_for("message", check=check, timeout=60)
+                log_channel = msg.content.strip()
+            except asyncio.TimeoutError:
+                await ctx.send("⏱️ Setup wizard timed out.")
+                return
+
+            await ctx.send("**Step 4/5:** Mention the **Contributor Role** to tag on PR open/merge (e.g. `@Contributor`), or type `skip`:")
+            try:
+                msg = await ctx.bot.wait_for("message", check=check, timeout=60)
+                contributor_role = msg.content.strip()
+            except asyncio.TimeoutError:
+                await ctx.send("⏱️ Setup wizard timed out.")
+                return
+
+            await ctx.send("**Step 5/5:** Enter the **GitHub Repository** to track (e.g. `community-outpost/GenHub`), or type `skip`:")
+            try:
+                msg = await ctx.bot.wait_for("message", check=check, timeout=60)
+                repo = msg.content.strip()
+            except asyncio.TimeoutError:
+                await ctx.send("⏱️ Setup wizard timed out.")
+                return
+
+        # Resolve IDs
+        issues_fid = self._resolve_channel_id(ctx.guild, issues_forum)
+        prs_fid = self._resolve_channel_id(ctx.guild, prs_forum)
+        log_cid = self._resolve_channel_id(ctx.guild, log_channel)
+        role_id = self._resolve_role_id(ctx.guild, contributor_role)
+
+        summary = ["✅ **GenHub All-In-One Setup Complete!**", ""]
+
+        if issues_fid:
+            await self.cog.config.issues_forum_id.set(issues_fid)
+            summary.append(f"• **Issues Forum:** <#{issues_fid}> (`{issues_fid}`)")
+        else:
+            summary.append(f"• **Issues Forum:** ⚠️ Could not resolve `{issues_forum}`")
+
+        if prs_fid:
+            await self.cog.config.prs_forum_id.set(prs_fid)
+            summary.append(f"• **PRs Forum:** <#{prs_fid}> (`{prs_fid}`)")
+        else:
+            summary.append(f"• **PRs Forum:** ⚠️ Could not resolve `{prs_forum}`")
+
+        if log_cid:
+            await self.cog.config.log_channel_id.set(log_cid)
+            summary.append(f"• **Log Channel:** <#{log_cid}> (`{log_cid}`)")
+
+        if role_id:
+            await self.cog.config.contributor_role_id.set(role_id)
+            summary.append(f"• **Contributor Role:** <@&{role_id}> (`{role_id}`)")
+
+        if repo and repo.lower() not in ("skip", "none"):
+            clean_repo = repo.strip().lstrip("/")
+            async with self.cog.config.allowed_repos() as repos:
+                if clean_repo not in repos:
+                    repos.append(clean_repo)
+            summary.append(f"• **Tracked Repo:** `{clean_repo}`")
+
+        summary.append("")
+        summary.append("👉 *Next steps:* Set your GitHub Token via `!genhub token <token>` (if needed) and run `!genhub diag` to verify your setup!")
+        await ctx.send("\n".join(summary))
 
     @genhub.command()
     async def host(self, ctx, host: str):

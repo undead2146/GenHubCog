@@ -37,9 +37,6 @@ class SlashCommands:
             ephemeral=True,
         )
 
-    @app_commands.command(
-        name="genhubconfig", description="Configure GenHub settings in one go"
-    )
     async def config_command(
         self,
         interaction: discord.Interaction,
@@ -63,3 +60,40 @@ class SlashCommands:
             prs_feed_chat_id=prs_feed_chat_id,
             contributor_role_id=contributor_role_id,
         )
+
+    async def setup_slash_command(
+        self,
+        interaction: discord.Interaction,
+        issues_forum: discord.ForumChannel = None,
+        prs_forum: discord.ForumChannel = None,
+        log_channel: discord.TextChannel = None,
+        contributor_role: discord.Role = None,
+        tracked_repo: str = None,
+    ):
+        """Configure GenHub using Discord native dropdown selectors."""
+        summary = ["✅ **GenHub Configuration Updated via Slash UI:**", ""]
+
+        if issues_forum:
+            await self.cog.config.issues_forum_id.set(issues_forum.id)
+            summary.append(f"• **Issues Forum:** {issues_forum.mention} (`{issues_forum.id}`)")
+
+        if prs_forum:
+            await self.cog.config.prs_forum_id.set(prs_forum.id)
+            summary.append(f"• **PRs Forum:** {prs_forum.mention} (`{prs_forum.id}`)")
+
+        if log_channel:
+            await self.cog.config.log_channel_id.set(log_channel.id)
+            summary.append(f"• **Log Channel:** {log_channel.mention} (`{log_channel.id}`)")
+
+        if contributor_role:
+            await self.cog.config.contributor_role_id.set(contributor_role.id)
+            summary.append(f"• **Contributor Role:** {contributor_role.mention} (`{contributor_role.id}`)")
+
+        if tracked_repo:
+            clean_repo = tracked_repo.strip().lstrip("/")
+            async with self.cog.config.allowed_repos() as repos:
+                if clean_repo not in repos:
+                    repos.append(clean_repo)
+            summary.append(f"• **Tracked Repo:** `{clean_repo}`")
+
+        await interaction.response.send_message("\n".join(summary), ephemeral=True)
