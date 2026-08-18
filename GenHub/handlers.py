@@ -203,13 +203,10 @@ class GitHubEventHandlers:
         forum = self.cog.bot.get_channel(forum_id)
         tags = await get_issue_tags(forum, issue)
 
-        # Prepare initial content for thread creation
-        role_mention = get_role_mention(
-            forum.guild if forum else None, await self.cog.config.contributor_role_id()
-        )
+        # Issues do not tag roles (only PR open/merge tag roles)
         initial_content = None
         if action == "opened":
-            initial_content = format_message("🆕", "Issue created", title, url, author, role_mention)
+            initial_content = format_message("🆕", "Issue created", title, url, author, "")
 
         thread, _ = await get_or_create_thread(
             self.cog.bot,
@@ -227,19 +224,18 @@ class GitHubEventHandlers:
 
         # Send action-specific messages (skip "opened" if we already sent initial content)
         if action == "opened" and initial_content:
-            # Initial content already sent during thread creation
             pass
         elif action == "closed":
             await update_status_tag(thread, "Closed")
             await send_message(
                 thread,
-                format_message("❌", "Issue closed", title, url, author, role_mention),
+                format_message("❌", "Issue closed", title, url, author, ""),
             )
         elif action == "reopened":
             await update_status_tag(thread, "Open")
             await send_message(
                 thread,
-                format_message("🔄", "Issue reopened", title, url, author, role_mention),
+                format_message("🔄", "Issue reopened", title, url, author, ""),
             )
         elif action in ("assigned", "unassigned"):
             assignee = issue.get("assignee")
@@ -252,8 +248,6 @@ class GitHubEventHandlers:
                 thread,
                 f"👤 **Issue {action}:** {assignee_text}\n🔧 Updated by: **{author}**",
             )
-
-    # (rest of your handlers remain unchanged)
 
     async def handle_pull_request(self, data, repo_full_name):
         pr = data["pull_request"]
@@ -269,7 +263,7 @@ class GitHubEventHandlers:
         forum = self.cog.bot.get_channel(forum_id)
         tags = await get_pr_tags(forum, pr)
 
-        # Prepare initial content for thread creation
+        # Role mention for PRs: only when opened or merged
         role_mention = get_role_mention(
             forum.guild if forum else None, await self.cog.config.contributor_role_id()
         )
@@ -290,13 +284,16 @@ class GitHubEventHandlers:
         elif action == "closed":
             if pr.get("merged") or pr.get("merged_at"):
                 await update_status_tag(thread, "Merged")
+                # Role mention tagged on merge
                 await send_message(thread, format_message("✅", "PR merged", title, url, author, role_mention))
             else:
                 await update_status_tag(thread, "Closed")
-                await send_message(thread, format_message("❌", "PR closed", title, url, author, role_mention))
+                # No role mention on close without merge
+                await send_message(thread, format_message("❌", "PR closed", title, url, author, ""))
         elif action == "reopened":
             await update_status_tag(thread, "Open")
-            await send_message(thread, format_message("🔄", "PR reopened", title, url, author, role_mention))
+            # No role mention on reopen
+            await send_message(thread, format_message("🔄", "PR reopened", title, url, author, ""))
         elif action in ("assigned", "unassigned"):
             assignee = pr.get("assignee")
             assignee_text = f"[{assignee['login']}]({assignee['html_url']})" if assignee else "Unknown"
@@ -320,8 +317,8 @@ class GitHubEventHandlers:
         if not thread or not body:
             return
 
-        role_mention = get_role_mention(thread.guild, await self.cog.config.contributor_role_id())
-        prefix = f"💬 **New {'PR' if is_pr else 'Issue'} comment** by **{author}** {role_mention} → [View Comment]({url})\n"
+        # No role mention on comments
+        prefix = f"💬 **New {'PR' if is_pr else 'Issue'} comment** by **{author}** → [View Comment]({url})\n"
         await send_message(thread, body, prefix=prefix)
 
     async def handle_pull_request_review(self, data, repo_full_name):
@@ -376,17 +373,15 @@ class GitHubEventHandlers:
             if not thread:
                 return
 
-            role_mention = get_role_mention(thread.guild, await self.cog.config.contributor_role_id())
-
             if entry["body"]:
-                prefix = f"📝 **Review submitted** by **{entry['author']}** {role_mention} → [View Review]({entry['url']})\n"
+                # No role mention on review submissions
+                prefix = f"📝 **Review submitted** by **{entry['author']}** → [View Review]({entry['url']})\n"
                 await send_message(thread, entry["body"], prefix=prefix)
 
             if entry["comments"]:
                 for i, (body, url) in enumerate(reversed(entry["comments"])):
-                    # Only include role mention if there's no review body (to avoid double mention)
-                    mention = role_mention if i == 0 and not entry["body"] else ""
-                    prefix = f"💬 **PR review comment** by **{entry['author']}** {mention} → [View Comment]({url})\n"
+                    # No role mention on review comments
+                    prefix = f"💬 **PR review comment** by **{entry['author']}** → [View Comment]({url})\n"
                     await send_message(thread, body, prefix=prefix)
 
         if key in self.pending_reviews and "task" in self.pending_reviews[key]:
@@ -404,15 +399,22 @@ class GitHubEventHandlers:
         author = item["user"]["login"] if item.get("user") else "Unknown"
         forum_id = forum.id
 
+        # For PRs: only reconcile open PRs (don't create threads for closed/merged PRs)
+        if is_pr and item.get("state") != "open":
+            print(f"⏭️ Skipping non-open PR #{number} ({item.get('state')})")
+            return
+
         # Compute desired tags
         tags = await (get_pr_tags(forum, item) if is_pr else get_issue_tags(forum, item))
         repo_tag = await get_or_create_tag(forum, repo.split("/")[-1])
         if repo_tag and repo_tag not in tags:
             tags.append(repo_tag)
 
-        # Prepare initial content
-        role_mention = get_role_mention(
-            forum.guild, await self.cog.config.contributor_role_id()
+        # Prepare initial content (only tag role on PRs)
+        role_mention = (
+            get_role_mention(forum.guild, await self.cog.config.contributor_role_id())
+            if is_pr
+            else ""
         )
         emoji = "🆕"
         action = "PR created" if is_pr else "Issue created"
@@ -576,14 +578,15 @@ class GitHubEventHandlers:
 
         print(f"✅ {item_type} forum found: {forum.name} ({forum.id})")
 
-        # Collect all GitHub items
+        # Collect all GitHub items (for PRs only fetch open ones)
         github_items = {}
         page = 1
         max_pages = 50
         total_items = 0
+        state_param = "open" if is_pr else "all"
 
         while page <= max_pages:
-            url = f"https://api.github.com/repos/{repo}/{endpoint}?state=all&per_page=100&page={page}"
+            url = f"https://api.github.com/repos/{repo}/{endpoint}?state={state_param}&per_page=100&page={page}"
             print(f"🌐 Fetching {item_type.lower()} page {page} for {repo}")
 
             status, data = await self._make_github_request(session, url)
@@ -600,6 +603,10 @@ class GitHubEventHandlers:
             for item in data:
                 # Filter out PRs from issues endpoint
                 if not is_pr and item.get("pull_request"):
+                    continue
+
+                # If is_pr, skip any non-open PR
+                if is_pr and item.get("state") != "open":
                     continue
 
                 number = item["number"]
@@ -619,8 +626,9 @@ class GitHubEventHandlers:
         if ctx:
             await ctx.send(f"✅ Processed {total_items} {item_type.lower()} for {repo}")
 
-        # Clean up orphaned threads
-        await self._cleanup_orphaned_threads(forum, repo, github_items, is_pr)
+        # Clean up orphaned threads (only for issues; PRs only reconcile open ones so closed PR threads are preserved)
+        if not is_pr:
+            await self._cleanup_orphaned_threads(forum, repo, github_items, is_pr)
 
     async def _cleanup_orphaned_threads(self, forum, repo, github_items, is_pr):
         """Clean up threads that exist in forum but don't have corresponding GitHub items."""
