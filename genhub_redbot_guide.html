@@ -4,9 +4,6 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>GeneralsHub Discord Bot & GenHub Cog Guide</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
     :root {
       --bg-dark: #0f1117;
@@ -821,7 +818,7 @@
       <div class="command-box">
         <div class="command-search">
           <span>🔍</span>
-          <input type="text" id="cmdSearch" class="search-input" placeholder="Search commands by name or description..." onkeyup="filterCommands()">
+          <input type="text" id="cmdSearch" class="search-input" placeholder="Search commands by name or description...">
         </div>
         <div class="table-responsive">
           <table class="cmd-table" id="commandTable">
@@ -838,85 +835,85 @@
                 <td><code class="cmd">!genhub showconfig</code></td>
                 <td>None</td>
                 <td>Displays active webhook ports, forum IDs, tracked repos, and token status</td>
-                <td><button class="copy-btn" onclick="copyText('!genhub showconfig')">📋 Copy</button></td>
+                <td><button class="copy-btn" data-copy="!genhub showconfig">📋 Copy</button></td>
               </tr>
               <tr>
                 <td><code class="cmd">!genhub reconcile</code></td>
                 <td><code>[repo_name]</code></td>
                 <td>Scans GitHub API and synchronizes all open PRs, issues, and comments</td>
-                <td><button class="copy-btn" onclick="copyText('!genhub reconcile')">📋 Copy</button></td>
+                <td><button class="copy-btn" data-copy="!genhub reconcile">📋 Copy</button></td>
               </tr>
               <tr>
                 <td><code class="cmd">!genhub addrepo</code></td>
                 <td><code>&lt;owner/repo&gt;</code></td>
                 <td>Adds a repository to the tracked allowlist (e.g., <code>community-outpost/GenHub</code>)</td>
-                <td><button class="copy-btn" onclick="copyText('!genhub addrepo community-outpost/GenHub')">📋 Copy</button></td>
+                <td><button class="copy-btn" data-copy="!genhub addrepo community-outpost/GenHub">📋 Copy</button></td>
               </tr>
               <tr>
                 <td><code class="cmd">!genhub removerepo</code></td>
                 <td><code>&lt;owner/repo&gt;</code></td>
                 <td>Removes a repository from the tracked allowlist</td>
-                <td><button class="copy-btn" onclick="copyText('!genhub removerepo community-outpost/GenHub')">📋 Copy</button></td>
+                <td><button class="copy-btn" data-copy="!genhub removerepo community-outpost/GenHub">📋 Copy</button></td>
               </tr>
               <tr>
                 <td><code class="cmd">!genhub issuesforum</code></td>
                 <td><code>&lt;forum_id&gt;</code></td>
                 <td>Sets the Forum channel ID for GitHub Issues (<code>github-issues-feed</code>)</td>
-                <td><button class="copy-btn" onclick="copyText('!genhub issuesforum ')">📋 Copy</button></td>
+                <td><button class="copy-btn" data-copy="!genhub issuesforum ">📋 Copy</button></td>
               </tr>
               <tr>
                 <td><code class="cmd">!genhub prsforum</code></td>
                 <td><code>&lt;forum_id&gt;</code></td>
                 <td>Sets the Forum channel ID for Pull Requests (<code>pull-requests-feed</code>)</td>
-                <td><button class="copy-btn" onclick="copyText('!genhub prsforum ')">📋 Copy</button></td>
+                <td><button class="copy-btn" data-copy="!genhub prsforum ">📋 Copy</button></td>
               </tr>
               <tr>
                 <td><code class="cmd">!genhub logchannel</code></td>
                 <td><code>&lt;channel_id&gt;</code></td>
                 <td>Sets the error and alert logging channel (<code>genhub-chat</code>)</td>
-                <td><button class="copy-btn" onclick="copyText('!genhub logchannel ')">📋 Copy</button></td>
+                <td><button class="copy-btn" data-copy="!genhub logchannel ">📋 Copy</button></td>
               </tr>
               <tr>
                 <td><code class="cmd">!genhub issuesfeedchat</code></td>
                 <td><code>&lt;channel_id&gt;</code></td>
                 <td>Sets the text channel for Issues chat feed notifications</td>
-                <td><button class="copy-btn" onclick="copyText('!genhub issuesfeedchat ')">📋 Copy</button></td>
+                <td><button class="copy-btn" data-copy="!genhub issuesfeedchat ">📋 Copy</button></td>
               </tr>
               <tr>
                 <td><code class="cmd">!genhub prsfeedchat</code></td>
                 <td><code>&lt;channel_id&gt;</code></td>
                 <td>Sets the text channel for PRs chat feed notifications</td>
-                <td><button class="copy-btn" onclick="copyText('!genhub prsfeedchat ')">📋 Copy</button></td>
+                <td><button class="copy-btn" data-copy="!genhub prsfeedchat ">📋 Copy</button></td>
               </tr>
               <tr>
                 <td><code class="cmd">!genhub contributorrole</code></td>
                 <td><code>&lt;role_id&gt;</code></td>
                 <td>Sets the role ID to tag on new PR opens and merges</td>
-                <td><button class="copy-btn" onclick="copyText('!genhub contributorrole ')">📋 Copy</button></td>
+                <td><button class="copy-btn" data-copy="!genhub contributorrole ">📋 Copy</button></td>
               </tr>
               <tr>
                 <td><code class="cmd">!genhub token</code></td>
                 <td><code>&lt;token&gt;</code></td>
                 <td>Configures the GitHub API Personal Access Token</td>
-                <td><button class="copy-btn" onclick="copyText('!genhub token ')">📋 Copy</button></td>
+                <td><button class="copy-btn" data-copy="!genhub token ">📋 Copy</button></td>
               </tr>
               <tr>
                 <td><code class="cmd">!genhub testrepo</code></td>
                 <td><code>&lt;owner/repo&gt;</code></td>
                 <td>Tests API reachability and permissions for a repository</td>
-                <td><button class="copy-btn" onclick="copyText('!genhub testrepo ')">📋 Copy</button></td>
+                <td><button class="copy-btn" data-copy="!genhub testrepo ">📋 Copy</button></td>
               </tr>
               <tr>
                 <td><code class="cmd">!genhub clearcache</code></td>
                 <td>None</td>
                 <td>Clears in-memory thread cache to force fresh lookups</td>
-                <td><button class="copy-btn" onclick="copyText('!genhub clearcache')">📋 Copy</button></td>
+                <td><button class="copy-btn" data-copy="!genhub clearcache">📋 Copy</button></td>
               </tr>
               <tr>
                 <td><code class="cmd">/genhubconfig</code></td>
                 <td>Slash UI</td>
                 <td>Modal interface to autofill and configure all parameters at once</td>
-                <td><button class="copy-btn" onclick="copyText('/genhubconfig')">📋 Copy</button></td>
+                <td><button class="copy-btn" data-copy="/genhubconfig">📋 Copy</button></td>
               </tr>
             </tbody>
           </table>
@@ -1008,39 +1005,50 @@
   </main>
 
   <script>
-    function filterCommands() {
-      const query = document.getElementById('cmdSearch').value.toLowerCase();
-      const rows = document.querySelectorAll('#commandTable tbody tr');
-      rows.forEach(row => {
-        const text = row.innerText.toLowerCase();
-        row.style.display = text.includes(query) ? '' : 'none';
-      });
-    }
+    document.addEventListener('DOMContentLoaded', () => {
+      const searchInput = document.getElementById('cmdSearch');
+      if (searchInput) {
+        searchInput.addEventListener('input', () => {
+          const query = searchInput.value.toLowerCase();
+          const rows = document.querySelectorAll('#commandTable tbody tr');
+          rows.forEach(row => {
+            const text = row.innerText.toLowerCase();
+            row.style.display = text.includes(query) ? '' : 'none';
+          });
+        });
+      }
 
-    function copyText(text) {
-      navigator.clipboard.writeText(text).then(() => {
-        alert('Copied to clipboard: ' + text);
-      });
-    }
-
-    // Highlight active link on scroll
-    window.addEventListener('scroll', () => {
-      const sections = document.querySelectorAll('section, div.hero, div.rule-callout');
-      const navLinks = document.querySelectorAll('.nav-link');
-      let current = '';
-
-      sections.forEach(section => {
-        const sectionTop = section.offsetTop;
-        if (pageYOffset >= sectionTop - 60) {
-          current = section.getAttribute('id');
-        }
+      document.querySelectorAll('.copy-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const text = btn.getAttribute('data-copy');
+          if (text) {
+            navigator.clipboard.writeText(text).then(() => {
+              const orig = btn.innerText;
+              btn.innerText = '✅ Copied!';
+              setTimeout(() => { btn.innerText = orig; }, 1500);
+            });
+          }
+        });
       });
 
-      navLinks.forEach(link => {
-        link.classList.remove('active');
-        if (link.getAttribute('href') === '#' + current) {
-          link.classList.add('active');
-        }
+      window.addEventListener('scroll', () => {
+        const sections = document.querySelectorAll('section, div.hero, div.rule-callout');
+        const navLinks = document.querySelectorAll('.nav-link');
+        let current = '';
+
+        sections.forEach(section => {
+          const sectionTop = section.offsetTop;
+          if (window.pageYOffset >= sectionTop - 60) {
+            current = section.getAttribute('id');
+          }
+        });
+
+        navLinks.forEach(link => {
+          link.classList.remove('active');
+          if (link.getAttribute('href') === '#' + current) {
+            link.classList.add('active');
+          }
+        });
       });
     });
   </script>
