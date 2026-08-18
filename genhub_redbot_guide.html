@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>GeneralsHub Discord Bot & GenHub Cog Guide</title>
+  <title>GeneralsHub Discord Bot & GenHub Cog Installation & Diagnostic Guide</title>
   <style>
     :root {
       --bg-dark: #0f1117;
@@ -33,7 +33,7 @@
     }
 
     body {
-      font-family: 'Plus Jakarta Sans', sans-serif;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
       background-color: var(--bg-dark);
       color: var(--text-main);
       line-height: 1.6;
@@ -44,7 +44,7 @@
 
     /* Sidebar Navigation */
     aside.sidebar {
-      width: 280px;
+      width: 290px;
       background-color: var(--bg-sidebar);
       border-right: 1px solid var(--border-color);
       display: flex;
@@ -79,16 +79,16 @@
     }
 
     .brand-text h1 {
-      font-size: 16px;
+      font-size: 15px;
       font-weight: 700;
       letter-spacing: -0.3px;
       color: #fff;
     }
 
     .brand-text span {
-      font-size: 12px;
+      font-size: 11px;
       color: var(--text-muted);
-      font-family: 'JetBrains Mono', monospace;
+      font-family: monospace;
     }
 
     .nav-section-title {
@@ -97,25 +97,25 @@
       text-transform: uppercase;
       letter-spacing: 0.8px;
       color: var(--text-muted);
-      margin: 16px 8px 8px;
+      margin: 14px 8px 6px;
     }
 
     .nav-links {
       list-style: none;
       display: flex;
       flex-direction: column;
-      gap: 4px;
+      gap: 3px;
     }
 
     .nav-link {
       display: flex;
       align-items: center;
       gap: 10px;
-      padding: 10px 12px;
+      padding: 9px 12px;
       border-radius: 8px;
       color: var(--text-muted);
       text-decoration: none;
-      font-size: 13.5px;
+      font-size: 13px;
       font-weight: 500;
       transition: all 0.2s ease;
     }
@@ -171,7 +171,7 @@
 
     /* Main Content Area */
     main.content {
-      margin-left: 280px;
+      margin-left: 290px;
       flex: 1;
       padding: 36px 48px 80px;
       max-width: 1300px;
@@ -190,7 +190,7 @@
     }
 
     .hero h2 {
-      font-size: 28px;
+      font-size: 26px;
       font-weight: 800;
       color: #fff;
       margin-bottom: 10px;
@@ -200,27 +200,27 @@
     }
 
     .hero p {
-      font-size: 15px;
+      font-size: 14.5px;
       color: var(--text-muted);
-      max-width: 800px;
+      max-width: 860px;
       margin-bottom: 24px;
     }
 
     .stats-row {
       display: flex;
-      gap: 20px;
+      gap: 16px;
       flex-wrap: wrap;
     }
 
     .stat-badge {
       background: var(--bg-card);
       border: 1px solid var(--border-color);
-      padding: 10px 16px;
+      padding: 9px 14px;
       border-radius: 8px;
       display: flex;
       align-items: center;
       gap: 8px;
-      font-size: 13px;
+      font-size: 12.5px;
     }
 
     .stat-badge strong {
@@ -237,13 +237,13 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
-      margin-bottom: 20px;
+      margin-bottom: 18px;
       border-bottom: 1px solid var(--border-color);
       padding-bottom: 12px;
     }
 
     .section-header h3 {
-      font-size: 20px;
+      font-size: 19px;
       font-weight: 700;
       color: #fff;
       display: flex;
@@ -256,6 +256,21 @@
       font-size: 14px;
       margin-bottom: 20px;
     }
+
+    /* Option Badges */
+    .option-badge {
+      display: inline-block;
+      padding: 3px 8px;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 8px;
+    }
+
+    .option-a { background: rgba(88, 101, 242, 0.2); color: #5865f2; border: 1px solid rgba(88, 101, 242, 0.4); }
+    .option-b { background: rgba(35, 165, 90, 0.2); color: #23a55a; border: 1px solid rgba(35, 165, 90, 0.4); }
 
     /* Cards Grid */
     .grid-2 {
@@ -274,7 +289,7 @@
       background-color: var(--bg-card);
       border: 1px solid var(--border-color);
       border-radius: var(--radius);
-      padding: 24px;
+      padding: 22px;
       transition: all 0.25s ease;
       position: relative;
     }
@@ -287,7 +302,7 @@
     }
 
     .card-title {
-      font-size: 16px;
+      font-size: 15px;
       font-weight: 600;
       color: #fff;
       margin-bottom: 8px;
@@ -297,9 +312,72 @@
     }
 
     .card p {
-      font-size: 13.5px;
+      font-size: 13px;
       color: var(--text-muted);
-      margin-bottom: 16px;
+      margin-bottom: 14px;
+    }
+
+    /* Steps list */
+    .step-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      margin-bottom: 20px;
+    }
+
+    .step-item {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius);
+      padding: 18px 22px;
+      display: flex;
+      gap: 18px;
+      align-items: flex-start;
+    }
+
+    .step-number {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: var(--accent-primary);
+      color: #fff;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      flex-shrink: 0;
+    }
+
+    .step-content {
+      flex: 1;
+    }
+
+    .step-content h4 {
+      color: #fff;
+      font-size: 15px;
+      margin-bottom: 6px;
+    }
+
+    .step-content p {
+      color: var(--text-muted);
+      font-size: 13.5px;
+      margin-bottom: 10px;
+    }
+
+    .code-block {
+      background: #10121a;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 8px;
+      padding: 10px 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-family: monospace;
+      font-size: 13px;
+      color: #00b0f4;
+      margin-top: 6px;
     }
 
     /* Discord Mockup Container */
@@ -353,7 +431,6 @@
       color: #949ba4;
       font-size: 13px;
       margin-bottom: 3px;
-      cursor: pointer;
       transition: background 0.15s;
     }
 
@@ -395,7 +472,7 @@
       align-items: center;
       justify-content: center;
       font-weight: 700;
-      font-size: 16px;
+      font-size: 15px;
       flex-shrink: 0;
     }
 
@@ -503,22 +580,22 @@
       width: 100%;
       border-collapse: collapse;
       text-align: left;
-      font-size: 13.5px;
+      font-size: 13px;
     }
 
     table.cmd-table th {
       background: rgba(255, 255, 255, 0.02);
-      padding: 12px 18px;
+      padding: 12px 16px;
       color: var(--text-muted);
       font-weight: 600;
-      font-size: 12px;
+      font-size: 11.5px;
       text-transform: uppercase;
       letter-spacing: 0.5px;
       border-bottom: 1px solid var(--border-color);
     }
 
     table.cmd-table td {
-      padding: 14px 18px;
+      padding: 12px 16px;
       border-bottom: 1px solid var(--border-color);
       vertical-align: middle;
     }
@@ -528,30 +605,31 @@
     }
 
     code.cmd {
-      font-family: 'JetBrains Mono', monospace;
+      font-family: monospace;
       background: #111319;
       border: 1px solid rgba(255, 255, 255, 0.08);
       padding: 4px 8px;
       border-radius: 6px;
       color: #5865f2;
-      font-size: 12.5px;
+      font-size: 12px;
       display: inline-flex;
       align-items: center;
       gap: 6px;
     }
 
     .copy-btn {
-      background: transparent;
-      border: none;
-      color: var(--text-muted);
+      background: rgba(88, 101, 242, 0.1);
+      border: 1px solid rgba(88, 101, 242, 0.3);
+      color: #c9cdfb;
       cursor: pointer;
-      font-size: 12px;
-      padding: 2px 4px;
-      border-radius: 4px;
-      transition: color 0.15s;
+      font-size: 11.5px;
+      padding: 4px 8px;
+      border-radius: 6px;
+      transition: all 0.15s;
     }
 
     .copy-btn:hover {
+      background: var(--accent-primary);
       color: #fff;
     }
 
@@ -560,7 +638,7 @@
       background: var(--bg-card);
       border: 1px solid var(--border-color);
       border-radius: var(--radius);
-      padding: 28px;
+      padding: 24px;
       margin-bottom: 24px;
     }
 
@@ -568,40 +646,40 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 16px;
+      gap: 14px;
       flex-wrap: wrap;
     }
 
     .flow-step {
       flex: 1;
-      min-width: 180px;
+      min-width: 170px;
       background: var(--bg-dark);
       border: 1px solid var(--border-color);
-      padding: 18px;
+      padding: 16px;
       border-radius: 10px;
       text-align: center;
       position: relative;
     }
 
     .flow-step .step-icon {
-      font-size: 24px;
-      margin-bottom: 8px;
+      font-size: 22px;
+      margin-bottom: 6px;
     }
 
     .flow-step h4 {
-      font-size: 14px;
+      font-size: 13.5px;
       color: #fff;
       margin-bottom: 4px;
     }
 
     .flow-step p {
-      font-size: 11.5px;
+      font-size: 11px;
       color: var(--text-muted);
     }
 
     .flow-arrow {
       color: var(--accent-primary);
-      font-size: 20px;
+      font-size: 18px;
       font-weight: 700;
     }
 
@@ -619,6 +697,24 @@
     .rule-callout strong {
       color: #fff;
     }
+
+    /* Diagnostic Box */
+    .diag-box {
+      background: #111319;
+      border: 1px solid var(--border-color);
+      border-left: 4px solid var(--accent-cyan);
+      border-radius: 8px;
+      padding: 16px 20px;
+      font-family: monospace;
+      font-size: 12.5px;
+      line-height: 1.7;
+      color: #dbdee1;
+      margin-top: 10px;
+    }
+
+    .diag-box strong { color: #fff; }
+    .diag-ok { color: var(--accent-green); }
+    .diag-warn { color: var(--accent-orange); }
 
     /* Responsive */
     @media (max-width: 900px) {
@@ -639,27 +735,32 @@
     <div class="brand">
       <div class="brand-icon">🚀</div>
       <div class="brand-text">
-        <h1>GeneralsHub Bot</h1>
-        <span>RedBot 3.5.24 + GenHub</span>
+        <h1>GenHub Cog</h1>
+        <span>RedBot GitHub Router v1.2.0</span>
       </div>
     </div>
 
-    <div class="nav-section-title">Navigation</div>
+    <div class="nav-section-title">Getting Started</div>
     <ul class="nav-links">
-      <li><a href="#overview" class="nav-link active"><span>📊</span> System Overview</a></li>
-      <li><a href="#genhub-architecture" class="nav-link"><span>⚡</span> GenHub Architecture</a></li>
-      <li><a href="#discord-layout" class="nav-link"><span>💬</span> Discord Structure</a></li>
+      <li><a href="#quick-install" class="nav-link active"><span>⚡</span> 3-Step Discord Install</a></li>
+      <li><a href="#channel-config" class="nav-link"><span>🛠️</span> Channel Setup</a></li>
+      <li><a href="#in-discord-diag" class="nav-link"><span>🔍</span> Diagnostics & Status</a></li>
+      <li><a href="#updating-cog" class="nav-link"><span>🔄</span> Updating via Discord</a></li>
+    </ul>
+
+    <div class="nav-section-title">Architecture & Rules</div>
+    <ul class="nav-links">
       <li><a href="#notification-rules" class="nav-link"><span>🔔</span> Notification Rules</a></li>
       <li><a href="#commands" class="nav-link"><span>⌨️</span> Command Reference</a></li>
-      <li><a href="#reconcile-engine" class="nav-link"><span>🔄</span> Reconcile Engine</a></li>
-      <li><a href="#cogs-overview" class="nav-link"><span>📦</span> Loaded RedBot Cogs</a></li>
+      <li><a href="#discord-layout" class="nav-link"><span>💬</span> GeneralsHub Layout</a></li>
+      <li><a href="#github-webhook" class="nav-link"><span>🐙</span> Webhook Settings</a></li>
     </ul>
 
     <div class="bot-status-pill">
       <div class="status-dot"></div>
       <div class="status-info">
         <strong>GitHubBot#0584 Online</strong>
-        <span>Port 8080 • Shard 0 Active</span>
+        <span>RedBot 3.5.24 • Shard 0</span>
       </div>
     </div>
   </aside>
@@ -669,74 +770,323 @@
 
     <!-- Hero Header -->
     <div class="hero" id="overview">
-      <h2>🚀 GeneralsHub Bot & GenHub Cog Documentation</h2>
+      <span class="option-badge option-a">Official Installation & Diagnostic Manual</span>
+      <h2>🚀 GenHub Cog: Discord Bot & GitHub Router</h2>
       <p>
-        A specialized GitHub-to-Discord real-time orchestration engine built on top of <strong>RedBot 3.5.24</strong> (discord.py 2.7.1). It captures repository events, creates structured forum threads, manages status tags, synchronizes comments, and eliminates notification spam.
+        The definitive, zero-terminal guide for installing, configuring, diagnosing, and updating the <strong>GenHub Cog</strong> on any RedBot instance. Designed for high-activity developer communities with rate limiting, open-only PR reconciliation, and selective role mentions.
       </p>
       <div class="stats-row">
-        <div class="stat-badge"><span>🟢</span> Version: <strong>RedBot 3.5.24</strong></div>
+        <div class="stat-badge"><span>📦</span> Cog Version: <strong>v1.2.0 (Latest)</strong></div>
+        <div class="stat-badge"><span>🤖</span> Target: <strong>RedBot 3.5.0+</strong></div>
         <div class="stat-badge"><span>🌐</span> Webhook Port: <strong>0.0.0.0:8080</strong></div>
-        <div class="stat-badge"><span>📦</span> Active Cogs: <strong>23 Loaded</strong></div>
-        <div class="stat-badge"><span>⚡</span> Rate Limiter: <strong>Adaptive Backoff</strong></div>
+        <div class="stat-badge"><span>🛡️</span> Push Protection: <strong>Cleaned & Verified</strong></div>
       </div>
     </div>
 
-    <!-- Rule Callout -->
-    <div class="rule-callout" id="notification-rules">
-      <strong>🔔 Active Notification Policy:</strong> Role mentions (<code>@Contributor</code>) are exclusively triggered when a <strong>New PR is Opened</strong> or an existing <strong>PR is Merged</strong>. Issues, closed unmerged PRs, review comments, and reconciliation updates generate threads cleanly without ping spam.
-    </div>
-
-    <!-- GenHub Event Flow -->
-    <section id="genhub-architecture">
+    <!-- 3-Step In-Discord Installation -->
+    <section id="quick-install">
       <div class="section-header">
-        <h3>⚡ Real-Time Ingestion Architecture</h3>
+        <h3>⚡ Option A: 3-Step In-Discord Installation (Recommended)</h3>
       </div>
       <p class="section-desc">
-        How GitHub webhook payloads flow through the local server, get validated, rate-limited, and dispatched to Discord forums and chats.
+        If you already have a RedBot instance running, you do not need terminal access. You can add the repository and install the cog directly inside Discord using standard Downloader commands.
       </p>
 
-      <div class="flow-container">
-        <div class="flow-steps">
-          <div class="flow-step">
-            <div class="step-icon">🐙</div>
-            <h4>GitHub Event</h4>
-            <p>Webhook triggered on PR, Issue, Comment, Review</p>
+      <div class="step-list">
+        <div class="step-item">
+          <div class="step-number">1</div>
+          <div class="step-content">
+            <h4>Add the GenHub Repository</h4>
+            <p>Tell your RedBot instance where to find the official GenHub Cog repository:</p>
+            <div class="code-block">
+              <span>!repo add genhubcog https://github.com/undead2146/GenHubCog</span>
+              <button class="copy-btn" data-copy="!repo add genhubcog https://github.com/undead2146/GenHubCog">📋 Copy</button>
+            </div>
           </div>
-          <div class="flow-arrow">→</div>
-          <div class="flow-step">
-            <div class="step-icon">🛡️</div>
-            <h4>Webhook Server</h4>
-            <p>Port 8080 (/github, /webhook) with HMAC validation</p>
+        </div>
+
+        <div class="step-item">
+          <div class="step-number">2</div>
+          <div class="step-content">
+            <h4>Install the Cog</h4>
+            <p>Download and compile the cog package into your bot storage:</p>
+            <div class="code-block">
+              <span>!cog install genhubcog GenHub</span>
+              <button class="copy-btn" data-copy="!cog install genhubcog GenHub">📋 Copy</button>
+            </div>
           </div>
-          <div class="flow-arrow">→</div>
-          <div class="flow-step">
-            <div class="step-icon">⚙️</div>
-            <h4>Event Handler</h4>
-            <p>2s Review batching & tag computation</p>
-          </div>
-          <div class="flow-arrow">→</div>
-          <div class="flow-step">
-            <div class="step-icon">💬</div>
-            <h4>Discord Forums</h4>
-            <p>Thread [GH] [#N] created in issues/PR feed</p>
+        </div>
+
+        <div class="step-item">
+          <div class="step-number">3</div>
+          <div class="step-content">
+            <h4>Load the Cog</h4>
+            <p>Activate the cog and start the internal webhook server:</p>
+            <div class="code-block">
+              <span>!load GenHub</span>
+              <button class="copy-btn" data-copy="!load GenHub">📋 Copy</button>
+            </div>
           </div>
         </div>
       </div>
     </section>
 
-    <!-- Discord Layout Visualizer -->
-    <section id="discord-layout">
+    <!-- Channel Configuration -->
+    <section id="channel-config">
       <div class="section-header">
-        <h3>💬 GeneralsHub Channel Mapping</h3>
+        <h3>🛠️ Step-by-Step Channel Configuration in Discord</h3>
       </div>
       <p class="section-desc">
-        Visual representation of your server layout and how each Discord channel interacts with the bot.
+        Right-click each channel in your Discord server (with <em>Developer Mode</em> turned on) to copy its ID, then execute these configuration commands:
+      </p>
+
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-title"><span>📁</span> 1. Set Forum Channels</div>
+          <p>Link your GitHub Issues forum and Pull Requests forum:</p>
+          <div class="code-block" style="margin-bottom:8px;">
+            <span>!genhub issuesforum &lt;issues_forum_id&gt;</span>
+            <button class="copy-btn" data-copy="!genhub issuesforum ">📋 Copy</button>
+          </div>
+          <div class="code-block">
+            <span>!genhub prsforum &lt;prs_forum_id&gt;</span>
+            <button class="copy-btn" data-copy="!genhub prsforum ">📋 Copy</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title"><span>🔔</span> 2. Set Log Channel & Roles</div>
+          <p>Configure bot error alerts and the role to mention on PR merges:</p>
+          <div class="code-block" style="margin-bottom:8px;">
+            <span>!genhub logchannel &lt;log_channel_id&gt;</span>
+            <button class="copy-btn" data-copy="!genhub logchannel ">📋 Copy</button>
+          </div>
+          <div class="code-block">
+            <span>!genhub contributorrole &lt;role_id&gt;</span>
+            <button class="copy-btn" data-copy="!genhub contributorrole ">📋 Copy</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title"><span>🐙</span> 3. Add Tracked Repositories</div>
+          <p>Add the repositories that the bot is allowed to ingest webhooks for:</p>
+          <div class="code-block">
+            <span>!genhub addrepo community-outpost/GenHub</span>
+            <button class="copy-btn" data-copy="!genhub addrepo community-outpost/GenHub">📋 Copy</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title"><span>🔑</span> 4. Add GitHub API Token</div>
+          <p>Personal access token used for rate-limited API queries and comment sync:</p>
+          <div class="code-block">
+            <span>!genhub token &lt;github_pat_token&gt;</span>
+            <button class="copy-btn" data-copy="!genhub token ">📋 Copy</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- In-Discord Diagnostics -->
+    <section id="in-discord-diag">
+      <div class="section-header">
+        <h3>🔍 In-Discord Diagnostics & Health Checking</h3>
+      </div>
+      <p class="section-desc">
+        Run comprehensive live diagnostics directly in Discord to verify permissions, webhook ports, token authenticity, and rate limit quotas without logging into the host machine.
+      </p>
+
+      <div class="card" style="margin-bottom: 20px;">
+        <div class="card-title"><span>⚡</span> Built-in Diagnostic Command</div>
+        <p>Type in Discord to execute an end-to-end health audit:</p>
+        <div class="code-block" style="max-width: 380px;">
+          <span>!genhub diag</span>
+          <button class="copy-btn" data-copy="!genhub diag">📋 Copy</button>
+        </div>
+        
+        <div class="diag-box">
+          <strong>📊 GenHub Cog System Diagnostics 📊</strong><br><br>
+          <strong>1. System & Version:</strong><br>
+          • Cog Version: <code>1.2.0</code> (Open-PR Reconcile, Selective Role Mentions)<br>
+          • Thread Cache: <code>14</code> cached items<br><br>
+          <strong>2. Webhook Server:</strong><br>
+          • Listening Address: <code>0.0.0.0:8080</code><br>
+          • Endpoints: <code>/github</code>, <code>/webhook</code>, <code>/health</code><br><br>
+          <strong>3. Discord Channels & Permissions:</strong><br>
+          • Issues Forum: <code>github-issues-feed</code> (1411476531024498740) → <span class="diag-ok">✅ Active & Permitted</span><br>
+          • PRs Forum: <code>pull-requests-feed</code> (1440047437506023445) → <span class="diag-ok">✅ Active & Permitted</span><br>
+          • Log Channel: <code>genhub-chat</code> (1401769761666371734) → <span class="diag-ok">✅ Active</span><br><br>
+          <strong>4. GitHub API & Rate Limits:</strong><br>
+          • Token Status: <span class="diag-ok">✅ Valid & Authenticated</span><br>
+          • Rate Limit: <code>4,982 / 5,000</code> remaining (Resets at <code>00:34:10 UTC</code>)<br><br>
+          <strong>5. Tracked Repositories (2):</strong><br>
+          • <code>community-outpost/GenHub</code><br>
+          • <code>community-outpost/GenHubCog</code>
+        </div>
+      </div>
+    </section>
+
+    <!-- Updating the Cog via Discord -->
+    <section id="updating-cog">
+      <div class="section-header">
+        <h3>🔄 Updating the Cog via Discord</h3>
+      </div>
+      <p class="section-desc">
+        Whenever new updates or fixes are pushed to GitHub, RedBot owners can update their installation in Discord with zero downtime.
+      </p>
+
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-title"><span>📡</span> 1. Check for Updates</div>
+          <p>Check if a newer version exists on GitHub:</p>
+          <div class="code-block">
+            <span>!cog checkforupdates</span>
+            <button class="copy-btn" data-copy="!cog checkforupdates">📋 Copy</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title"><span>🚀</span> 2. Apply Update & Reload</div>
+          <p>Pull the latest version and reload the cog into memory:</p>
+          <div class="code-block" style="margin-bottom:8px;">
+            <span>!cog update GenHub</span>
+            <button class="copy-btn" data-copy="!cog update GenHub">📋 Copy</button>
+          </div>
+          <div class="code-block">
+            <span>!reload GenHub</span>
+            <button class="copy-btn" data-copy="!reload GenHub">📋 Copy</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Notification Rules Callout -->
+    <div class="rule-callout" id="notification-rules">
+      <strong>🔔 Notification & Role Mention Policy:</strong> Role mentions (<code>@Contributor</code>) are triggered **ONLY** when a <strong>New PR is Opened</strong> or an existing <strong>PR is Merged</strong>. Regular comments, issue creations, closed unmerged PRs, and reviews create threads cleanly with zero notification spam.
+    </div>
+
+    <!-- Searchable Command Reference Table -->
+    <section id="commands">
+      <div class="section-header">
+        <h3>⌨️ Complete GenHub Command Reference</h3>
+      </div>
+      <p class="section-desc">
+        Interactive table of all available commands. Click any command to copy it to your clipboard.
+      </p>
+
+      <div class="command-box">
+        <div class="command-search">
+          <span>🔍</span>
+          <input type="text" id="cmdSearch" class="search-input" placeholder="Search commands by keyword, name, or purpose...">
+        </div>
+        <div class="table-responsive">
+          <table class="cmd-table" id="commandTable">
+            <thead>
+              <tr>
+                <th>Command</th>
+                <th>Arguments</th>
+                <th>Description</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><code class="cmd">!genhub diag</code></td>
+                <td>None</td>
+                <td>Runs comprehensive health check on permissions, webhook server, and GitHub rate limits</td>
+                <td><button class="copy-btn" data-copy="!genhub diag">📋 Copy</button></td>
+              </tr>
+              <tr>
+                <td><code class="cmd">!genhub showconfig</code></td>
+                <td>None</td>
+                <td>Displays active webhook ports, forum IDs, tracked repos, and token status</td>
+                <td><button class="copy-btn" data-copy="!genhub showconfig">📋 Copy</button></td>
+              </tr>
+              <tr>
+                <td><code class="cmd">!genhub reconcile</code></td>
+                <td><code>[repo_name]</code></td>
+                <td>Scans GitHub API and synchronizes all active open PRs, issues, and comments</td>
+                <td><button class="copy-btn" data-copy="!genhub reconcile">📋 Copy</button></td>
+              </tr>
+              <tr>
+                <td><code class="cmd">!genhub testrepo</code></td>
+                <td><code>&lt;owner/repo&gt;</code></td>
+                <td>Tests API reachability and permissions for a specific repository</td>
+                <td><button class="copy-btn" data-copy="!genhub testrepo community-outpost/GenHub">📋 Copy</button></td>
+              </tr>
+              <tr>
+                <td><code class="cmd">!genhub addrepo</code></td>
+                <td><code>&lt;owner/repo&gt;</code></td>
+                <td>Adds a repository to the tracked allowlist</td>
+                <td><button class="copy-btn" data-copy="!genhub addrepo community-outpost/GenHub">📋 Copy</button></td>
+              </tr>
+              <tr>
+                <td><code class="cmd">!genhub removerepo</code></td>
+                <td><code>&lt;owner/repo&gt;</code></td>
+                <td>Removes a repository from the tracked allowlist</td>
+                <td><button class="copy-btn" data-copy="!genhub removerepo community-outpost/GenHub">📋 Copy</button></td>
+              </tr>
+              <tr>
+                <td><code class="cmd">!genhub issuesforum</code></td>
+                <td><code>&lt;forum_id&gt;</code></td>
+                <td>Sets the Forum channel ID for GitHub Issues</td>
+                <td><button class="copy-btn" data-copy="!genhub issuesforum ">📋 Copy</button></td>
+              </tr>
+              <tr>
+                <td><code class="cmd">!genhub prsforum</code></td>
+                <td><code>&lt;forum_id&gt;</code></td>
+                <td>Sets the Forum channel ID for Pull Requests</td>
+                <td><button class="copy-btn" data-copy="!genhub prsforum ">📋 Copy</button></td>
+              </tr>
+              <tr>
+                <td><code class="cmd">!genhub logchannel</code></td>
+                <td><code>&lt;channel_id&gt;</code></td>
+                <td>Sets the error and alert logging channel</td>
+                <td><button class="copy-btn" data-copy="!genhub logchannel ">📋 Copy</button></td>
+              </tr>
+              <tr>
+                <td><code class="cmd">!genhub contributorrole</code></td>
+                <td><code>&lt;role_id&gt;</code></td>
+                <td>Sets the role ID to tag on new PR opens and merges</td>
+                <td><button class="copy-btn" data-copy="!genhub contributorrole ">📋 Copy</button></td>
+              </tr>
+              <tr>
+                <td><code class="cmd">!genhub token</code></td>
+                <td><code>&lt;token&gt;</code></td>
+                <td>Configures the GitHub API Personal Access Token</td>
+                <td><button class="copy-btn" data-copy="!genhub token ">📋 Copy</button></td>
+              </tr>
+              <tr>
+                <td><code class="cmd">!genhub clearcache</code></td>
+                <td>None</td>
+                <td>Clears in-memory thread cache to force fresh lookups</td>
+                <td><button class="copy-btn" data-copy="!genhub clearcache">📋 Copy</button></td>
+              </tr>
+              <tr>
+                <td><code class="cmd">/genhubconfig</code></td>
+                <td>Slash UI</td>
+                <td>Interactive modal interface to configure all parameters at once</td>
+                <td><button class="copy-btn" data-copy="/genhubconfig">📋 Copy</button></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- Discord Layout Mockup -->
+    <section id="discord-layout">
+      <div class="section-header">
+        <h3>💬 GeneralsHub Channel Hierarchy Visualizer</h3>
+      </div>
+      <p class="section-desc">
+        Visual preview of the standard GeneralsHub Discord channel and forum hierarchy.
       </p>
 
       <div class="discord-mockup">
         <div class="discord-header">
           <span style="font-weight:700; color:#fff; font-size:14px;">🚀 GeneralsHub Discord</span>
-          <span style="color:#949ba4; font-size:12px;">ID: 1420182734986543264</span>
+          <span style="color:#949ba4; font-size:12px;">Server ID: 1420182734986543264</span>
         </div>
         <div class="discord-channel-list">
           <div class="channel-sidebar">
@@ -806,199 +1156,27 @@
       </div>
     </section>
 
-    <!-- Command Reference -->
-    <section id="commands">
+    <!-- GitHub Webhook Settings -->
+    <section id="github-webhook">
       <div class="section-header">
-        <h3>⌨️ GenHub Command Reference</h3>
+        <h3>🐙 GitHub Webhook Configuration Checklist</h3>
       </div>
-      <p class="section-desc">
-        All bot management commands can be executed by server owners in Discord using the <code>!</code> prefix or via slash command.
-      </p>
-
-      <div class="command-box">
-        <div class="command-search">
-          <span>🔍</span>
-          <input type="text" id="cmdSearch" class="search-input" placeholder="Search commands by name or description...">
-        </div>
-        <div class="table-responsive">
-          <table class="cmd-table" id="commandTable">
-            <thead>
-              <tr>
-                <th>Command</th>
-                <th>Arguments</th>
-                <th>Description</th>
-                <th>Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td><code class="cmd">!genhub showconfig</code></td>
-                <td>None</td>
-                <td>Displays active webhook ports, forum IDs, tracked repos, and token status</td>
-                <td><button class="copy-btn" data-copy="!genhub showconfig">📋 Copy</button></td>
-              </tr>
-              <tr>
-                <td><code class="cmd">!genhub reconcile</code></td>
-                <td><code>[repo_name]</code></td>
-                <td>Scans GitHub API and synchronizes all open PRs, issues, and comments</td>
-                <td><button class="copy-btn" data-copy="!genhub reconcile">📋 Copy</button></td>
-              </tr>
-              <tr>
-                <td><code class="cmd">!genhub addrepo</code></td>
-                <td><code>&lt;owner/repo&gt;</code></td>
-                <td>Adds a repository to the tracked allowlist (e.g., <code>community-outpost/GenHub</code>)</td>
-                <td><button class="copy-btn" data-copy="!genhub addrepo community-outpost/GenHub">📋 Copy</button></td>
-              </tr>
-              <tr>
-                <td><code class="cmd">!genhub removerepo</code></td>
-                <td><code>&lt;owner/repo&gt;</code></td>
-                <td>Removes a repository from the tracked allowlist</td>
-                <td><button class="copy-btn" data-copy="!genhub removerepo community-outpost/GenHub">📋 Copy</button></td>
-              </tr>
-              <tr>
-                <td><code class="cmd">!genhub issuesforum</code></td>
-                <td><code>&lt;forum_id&gt;</code></td>
-                <td>Sets the Forum channel ID for GitHub Issues (<code>github-issues-feed</code>)</td>
-                <td><button class="copy-btn" data-copy="!genhub issuesforum ">📋 Copy</button></td>
-              </tr>
-              <tr>
-                <td><code class="cmd">!genhub prsforum</code></td>
-                <td><code>&lt;forum_id&gt;</code></td>
-                <td>Sets the Forum channel ID for Pull Requests (<code>pull-requests-feed</code>)</td>
-                <td><button class="copy-btn" data-copy="!genhub prsforum ">📋 Copy</button></td>
-              </tr>
-              <tr>
-                <td><code class="cmd">!genhub logchannel</code></td>
-                <td><code>&lt;channel_id&gt;</code></td>
-                <td>Sets the error and alert logging channel (<code>genhub-chat</code>)</td>
-                <td><button class="copy-btn" data-copy="!genhub logchannel ">📋 Copy</button></td>
-              </tr>
-              <tr>
-                <td><code class="cmd">!genhub issuesfeedchat</code></td>
-                <td><code>&lt;channel_id&gt;</code></td>
-                <td>Sets the text channel for Issues chat feed notifications</td>
-                <td><button class="copy-btn" data-copy="!genhub issuesfeedchat ">📋 Copy</button></td>
-              </tr>
-              <tr>
-                <td><code class="cmd">!genhub prsfeedchat</code></td>
-                <td><code>&lt;channel_id&gt;</code></td>
-                <td>Sets the text channel for PRs chat feed notifications</td>
-                <td><button class="copy-btn" data-copy="!genhub prsfeedchat ">📋 Copy</button></td>
-              </tr>
-              <tr>
-                <td><code class="cmd">!genhub contributorrole</code></td>
-                <td><code>&lt;role_id&gt;</code></td>
-                <td>Sets the role ID to tag on new PR opens and merges</td>
-                <td><button class="copy-btn" data-copy="!genhub contributorrole ">📋 Copy</button></td>
-              </tr>
-              <tr>
-                <td><code class="cmd">!genhub token</code></td>
-                <td><code>&lt;token&gt;</code></td>
-                <td>Configures the GitHub API Personal Access Token</td>
-                <td><button class="copy-btn" data-copy="!genhub token ">📋 Copy</button></td>
-              </tr>
-              <tr>
-                <td><code class="cmd">!genhub testrepo</code></td>
-                <td><code>&lt;owner/repo&gt;</code></td>
-                <td>Tests API reachability and permissions for a repository</td>
-                <td><button class="copy-btn" data-copy="!genhub testrepo ">📋 Copy</button></td>
-              </tr>
-              <tr>
-                <td><code class="cmd">!genhub clearcache</code></td>
-                <td>None</td>
-                <td>Clears in-memory thread cache to force fresh lookups</td>
-                <td><button class="copy-btn" data-copy="!genhub clearcache">📋 Copy</button></td>
-              </tr>
-              <tr>
-                <td><code class="cmd">/genhubconfig</code></td>
-                <td>Slash UI</td>
-                <td>Modal interface to autofill and configure all parameters at once</td>
-                <td><button class="copy-btn" data-copy="/genhubconfig">📋 Copy</button></td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </section>
-
-    <!-- Reconcile Engine Section -->
-    <section id="reconcile-engine">
-      <div class="section-header">
-        <h3>🔄 Reconciliation & Rate Limiter Engine</h3>
-      </div>
-      <div class="grid-2">
-        <div class="card">
-          <div class="card-title"><span>🛡️</span> Open PR Filtering Rule</div>
-          <p>
-            Reconciliation only fetches and creates threads for <strong>active OPEN PRs</strong>. Historical closed and merged pull requests are ignored during thread generation to maintain a lean, clean forum layout.
-          </p>
-          <ul style="color:var(--text-muted); font-size:13px; margin-left:18px;">
-            <li>Zero clutter from months of closed PRs</li>
-            <li>Existing closed threads are safely preserved</li>
-            <li>Tags are synced dynamically</li>
-          </ul>
-        </div>
-
-        <div class="card">
-          <div class="card-title"><span>⏳</span> Exponential Rate Limiting</div>
-          <p>
-            The built-in <code>RateLimiter</code> tracks GitHub API response headers (<code>X-RateLimit-Remaining</code> and <code>X-RateLimit-Reset</code>) and paces requests with automatic exponential backoff.
-          </p>
-          <ul style="color:var(--text-muted); font-size:13px; margin-left:18px;">
-            <li>0.75s minimum interval between calls</li>
-            <li>Automatic sleep when approaching limits</li>
-            <li>Prevents 403 Secondary Rate Limit errors</li>
-          </ul>
-        </div>
-      </div>
-    </section>
-
-    <!-- RedBot Loaded Cogs Overview -->
-    <section id="cogs-overview">
-      <div class="section-header">
-        <h3>📦 Active RedBot 3.5.24 Cogs</h3>
-      </div>
-      <p class="section-desc">
-        Complete overview of the 23 loaded packages providing modular management, moderation, and utility features.
-      </p>
-
-      <div class="grid-3">
-        <div class="card">
-          <div class="card-title"><span>🐙</span> GenHub</div>
-          <p>GitHub Webhook & Forum router for issues, PRs, comments, and reviews.</p>
-        </div>
-        <div class="card">
-          <div class="card-title"><span>🛡️</span> Mod & ModLog</div>
-          <p>Complete moderation suite with kicks, bans, mutes, warnings, and audit cases.</p>
-        </div>
-        <div class="card">
-          <div class="card-title"><span>🎵</span> Audio & Streams</div>
-          <p>Music playback management, YouTube / Twitch notifications and alerts.</p>
-        </div>
-        <div class="card">
-          <div class="card-title"><span>💰</span> Economy & Bank</div>
-          <p>Virtual currency, payday rewards, bank accounts, and leaderboards.</p>
-        </div>
-        <div class="card">
-          <div class="card-title"><span>⚡</span> CustomCommands</div>
-          <p>Create dynamic custom responses, text triggers, and macro templates.</p>
-        </div>
-        <div class="card">
-          <div class="card-title"><span>🧹</span> Cleanup & Filter</div>
-          <p>Automated chat filtering, anti-spam, and mass message deletion utilities.</p>
-        </div>
-        <div class="card">
-          <div class="card-title"><span>🔐</span> Permissions</div>
-          <p>Granular rule-based permissions for users, roles, and server channels.</p>
-        </div>
-        <div class="card">
-          <div class="card-title"><span>📥</span> Downloader</div>
-          <p>Install, update, and manage 3rd party community cogs and extensions.</p>
-        </div>
-        <div class="card">
-          <div class="card-title"><span>🎲</span> Trivia & Image</div>
-          <p>Interactive games, trivia sessions, and image generation/editing commands.</p>
-        </div>
+      <div class="card">
+        <div class="card-title"><span>⚙️</span> In your GitHub Repository Settings (Settings &gt; Webhooks &gt; Add webhook):</div>
+        <ul style="color:var(--text-muted); font-size:13.5px; margin: 12px 20px; line-height: 1.8;">
+          <li><strong>Payload URL:</strong> <code>http://&lt;YOUR_SERVER_IP&gt;:8080/github</code> (or <code>/webhook</code>)</li>
+          <li><strong>Content type:</strong> <code>application/json</code></li>
+          <li><strong>Secret:</strong> <em>(Optional, set via <code>!genhub secret &lt;secret&gt;</code> if configured)</em></li>
+          <li><strong>Events to select:</strong>
+            <ul style="margin-left: 20px;">
+              <li>☑️ <strong>Issues</strong></li>
+              <li>☑️ <strong>Pull requests</strong></li>
+              <li>☑️ <strong>Issue comments</strong></li>
+              <li>☑️ <strong>Pull request reviews</strong></li>
+              <li>☑️ <strong>Pull request review comments</strong></li>
+            </ul>
+          </li>
+        </ul>
       </div>
     </section>
 
