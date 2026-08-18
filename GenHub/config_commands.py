@@ -166,3 +166,107 @@ class ConfigCommands(commands.Cog):
             f"**Contributor Role ID:** {config.get('contributor_role_id')}\n"
         )
         await ctx.send(message)
+
+    @genhub.command(aliases=["status", "diag", "version"])
+    async def diagnostics(self, ctx):
+        """Run full diagnostics on GenHub Cog, Webhook Server, Discord channels, and GitHub API."""
+        import aiohttp
+        import datetime
+
+        loading_msg = await ctx.send("🔍 Running GenHub diagnostics...")
+        config = await self.cog.config.all()
+
+        lines = ["📊 **GenHub Cog System Diagnostics** 📊", ""]
+
+        # 1. Version & Bot info
+        lines.append("**1. System & Version:**")
+        lines.append("• Cog Version: `1.2.0` (Open-PR Reconcile, Selective Role Mentions)")
+        lines.append(f"• Thread Cache: `{len(self.cog.thread_cache)}` cached items")
+        lines.append("")
+
+        # 2. Webhook Server
+        lines.append("**2. Webhook Server:**")
+        host = config.get("webhook_host", "0.0.0.0")
+        port = config.get("webhook_port", 8080)
+        lines.append(f"• Listening Address: `{host}:{port}`")
+        lines.append("• Endpoints: `/github`, `/webhook`, `/health`")
+        lines.append("")
+
+        # 3. Channel & Forum Verification
+        lines.append("**3. Discord Channels & Permissions:**")
+        
+        # Check Issues Forum
+        issues_id = config.get("issues_forum_id")
+        if issues_id:
+            ch = self.cog.bot.get_channel(issues_id)
+            if ch:
+                perms = ch.permissions_for(ctx.guild.me if ctx.guild else ch.guild.me)
+                can_post = perms.send_messages and perms.create_public_threads
+                status = "✅ Active & Permitted" if can_post else "⚠️ Missing Thread Permissions"
+                lines.append(f"• Issues Forum: `{ch.name}` ({issues_id}) → {status}")
+            else:
+                lines.append(f"• Issues Forum: ❌ Channel ID `{issues_id}` not found")
+        else:
+            lines.append("• Issues Forum: ⚠️ Not configured (`!genhub issuesforum <id>`)")
+
+        # Check PRs Forum
+        prs_id = config.get("prs_forum_id")
+        if prs_id:
+            ch = self.cog.bot.get_channel(prs_id)
+            if ch:
+                perms = ch.permissions_for(ctx.guild.me if ctx.guild else ch.guild.me)
+                can_post = perms.send_messages and perms.create_public_threads
+                status = "✅ Active & Permitted" if can_post else "⚠️ Missing Thread Permissions"
+                lines.append(f"• PRs Forum: `{ch.name}` ({prs_id}) → {status}")
+            else:
+                lines.append(f"• PRs Forum: ❌ Channel ID `{prs_id}` not found")
+        else:
+            lines.append("• PRs Forum: ⚠️ Not configured (`!genhub prsforum <id>`)")
+
+        # Check Log Channel
+        log_id = config.get("log_channel_id")
+        if log_id:
+            ch = self.cog.bot.get_channel(log_id)
+            if ch:
+                lines.append(f"• Log Channel: `{ch.name}` ({log_id}) → ✅ Active")
+            else:
+                lines.append(f"• Log Channel: ❌ Channel ID `{log_id}` not found")
+        else:
+            lines.append("• Log Channel: ℹ️ Not configured (optional)")
+        lines.append("")
+
+        # 4. GitHub API & Rate Limits
+        lines.append("**4. GitHub API & Rate Limits:**")
+        token = config.get("github_token")
+        if token:
+            headers = {"Accept": "application/vnd.github.v3+json", "Authorization": f"token {token}"}
+            try:
+                async with aiohttp.ClientSession(headers=headers) as session:
+                    async with session.get("https://api.github.com/rate_limit", timeout=5) as resp:
+                        if resp.status == 200:
+                            data = await resp.json()
+                            core = data.get("resources", {}).get("core", {})
+                            rem = core.get("remaining", 0)
+                            limit = core.get("limit", 0)
+                            reset_ts = core.get("reset", 0)
+                            reset_time = datetime.datetime.fromtimestamp(reset_ts).strftime("%H:%M:%S UTC")
+                            lines.append(f"• Token Status: ✅ Valid & Authenticated")
+                            lines.append(f"• Rate Limit: `{rem}/{limit}` remaining (Resets at `{reset_time}`)")
+                        else:
+                            lines.append(f"• Token Status: ❌ API Error (HTTP {resp.status})")
+            except Exception as e:
+                lines.append(f"• GitHub Connection: ❌ Failed ({e})")
+        else:
+            lines.append("• GitHub Token: ❌ Not set (`!genhub token <token>`)")
+        lines.append("")
+
+        # 5. Tracked Repositories
+        repos = config.get("allowed_repos", [])
+        lines.append(f"**5. Tracked Repositories ({len(repos)}):**")
+        if repos:
+            for r in repos:
+                lines.append(f"• `{r}`")
+        else:
+            lines.append("• ⚠️ No repositories configured (`!genhub addrepo <owner/repo>`)")
+
+        await loading_msg.edit(content="\n".join(lines))

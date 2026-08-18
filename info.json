@@ -1,0 +1,7 @@
+{
+    "author": ["undead2146"],
+    "description": "GenHub Discord Bot Cogs - Real-time GitHub to Discord Forum & Thread Synchronization",
+    "short": "GenHub GitHub Integration Cogs",
+    "tags": ["github", "discord", "forums", "webhooks", "genhub"],
+    "name": "GenHubCog"
+}

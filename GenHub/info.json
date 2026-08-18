@@ -1,10 +1,12 @@
 {
-    "name": "genhub",
     "author": ["undead2146"],
-    "version": "1.1",
+    "name": "GenHub",
+    "version": "1.2.0",
+    "min_bot_version": "3.5.0",
+    "max_bot_version": "3.5.99",
     "short": "GitHub to Discord Forum Router",
-    "description": "Receives GitHub webhook events and routes them to the correct Discord forum post.",
+    "description": "Receives GitHub webhook events (issues, PRs, comments, reviews) and routes them to Discord forums with rate limiting, open-only reconcile, and selective role mentions.",
     "tags": ["github", "discord", "forum", "webhook"],
     "requirements": ["aiohttp"],
-    "end_user_data_statement": "This cog does not persistently store any user data."
+    "end_user_data_statement": "This cog does not persistently store any personal user data."
 }
