@@ -150,19 +150,19 @@ class ConfigCommands(commands.Cog):
     async def showconfig(self, ctx):
         """Show the current GenHub configuration."""
         config = await self.cog.config.all()
-        token_status = "✅ Set in config" if config['github_token'] else "❌ Not set"
+        token_status = "✅ Set in config" if config.get('github_token') else "❌ Not set"
         message = (
             "📌 **GenHub Configuration** 📌\n"
-            f"**Webhook Host:** {config['webhook_host']}\n"
-            f"**Webhook Port:** {config['webhook_port']}\n"
-            f"**GitHub Secret:** {config['github_secret']}\n"
+            f"**Webhook Host:** {config.get('webhook_host')}\n"
+            f"**Webhook Port:** {config.get('webhook_port')}\n"
+            f"**GitHub Secret:** {config.get('github_secret')}\n"
             f"**GitHub Token:** {token_status}\n"
-            f"**Allowed Repos:** {config['allowed_repos']}\n"
-            f"**Log Channel ID:** {config['log_channel_id']}\n"
-            f"**Issues Forum ID:** {config['issues_forum_id']}\n"
-            f"**PRs Forum ID:** {config['prs_forum_id']}\n"
-            f"**Issues Feed Chat ID:** {config['issues_feed_chat_id']}\n"
-            f"**PRs Feed Chat ID:** {config['prs_feed_chat_id']}\n"
-            f"**Contributor Role ID:** {config['contributor_role_id']}\n"
+            f"**Allowed Repos:** {config.get('allowed_repos')}\n"
+            f"**Log Channel ID:** {config.get('log_channel_id')}\n"
+            f"**Issues Forum ID:** {config.get('issues_forum_id')}\n"
+            f"**PRs Forum ID:** {config.get('prs_forum_id')}\n"
+            f"**Issues Feed Chat ID:** {config.get('issues_feed_chat_id')}\n"
+            f"**PRs Feed Chat ID:** {config.get('prs_feed_chat_id')}\n"
+            f"**Contributor Role ID:** {config.get('contributor_role_id')}\n"
         )
         await ctx.send(message)

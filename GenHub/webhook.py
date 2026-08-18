@@ -15,6 +15,12 @@ class WebhookServer:
         port = await self.cog.config.webhook_port()
         app = web.Application()
         app.router.add_post("/github", self.webhook_handler)
+        app.router.add_post("/webhook", self.webhook_handler)
+        app.router.add_post("/", self.webhook_handler)
+        app.router.add_get("/", lambda r: web.Response(text="GenHub Webhook Server OK"))
+        app.router.add_get("/health", lambda r: web.Response(text="OK"))
+        app.router.add_get("/webhook", lambda r: web.Response(text="GenHub Webhook Server OK"))
+        app.router.add_get("/github", lambda r: web.Response(text="GenHub Webhook Server OK"))
         self.runner = web.AppRunner(app)
         await self.runner.setup()
         self.server = web.TCPSite(self.runner, host, port)
@@ -30,14 +36,16 @@ class WebhookServer:
 
     async def webhook_handler(self, request: web.Request):
         secret = await self.cog.config.github_secret()
-        signature = request.headers.get("X-Hub-Signature-256")
-        if not signature:
-            return web.Response(status=401, text="Missing signature")
-
         body = await request.read()
-        digest = hmac.new(secret.encode(), body, sha256).hexdigest()
-        if not hmac.compare_digest(f"sha256={digest}", signature):
-            return web.Response(status=401, text="Invalid signature")
+
+        if secret:
+            signature = request.headers.get("X-Hub-Signature-256")
+            if not signature:
+                return web.Response(status=401, text="Missing signature")
+
+            digest = hmac.new(secret.encode(), body, sha256).hexdigest()
+            if not hmac.compare_digest(f"sha256={digest}", signature):
+                return web.Response(status=401, text="Invalid signature")
 
         try:
             data = json.loads(body.decode("utf-8"))

@@ -87,12 +87,14 @@ async def test_reconcile_forum_tags_exception(monkeypatch):
     cog.thread_cache = {}
     handler = GitHubEventHandlers(cog)
 
-    # Patch aiohttp.ClientSession to raise on get
+    # Patch aiohttp.ClientSession to raise on request
     class FakeSession:
         def __init__(self, *args, **kwargs): pass
         async def __aenter__(self): return self
         async def __aexit__(self,*a): return False
         def get(self,*a,**k):
+            raise RuntimeError("fail")
+        def request(self,*a,**k):
             raise RuntimeError("fail")
     monkeypatch.setattr("GenHub.handlers.aiohttp.ClientSession", lambda *args, **kwargs: FakeSession())
 

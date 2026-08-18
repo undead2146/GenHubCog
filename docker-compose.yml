@@ -1,0 +1,21 @@
+version: '3.8'
+
+services:
+  genhubbot:
+    build: .
+    container_name: genhubbot
+    restart: unless-stopped
+    environment:
+      - GENHUB_GITHUB_TOKEN=${GENHUB_GITHUB_TOKEN}
+      - DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN}
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./redbot-data:/home/redbot/redbot-data
+      - .:/home/redbot/GenHubCog
+    networks:
+      - redbot-network
+
+networks:
+  redbot-network:
+    driver: bridge
