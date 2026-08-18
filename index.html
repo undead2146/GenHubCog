@@ -1,0 +1,1048 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GeneralsHub Discord Bot & GenHub Cog Guide</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-dark: #0f1117;
+      --bg-card: #181b24;
+      --bg-card-hover: #1f2330;
+      --bg-sidebar: #13151f;
+      --accent-primary: #5865f2;
+      --accent-green: #23a55a;
+      --accent-orange: #f0b232;
+      --accent-red: #f23f43;
+      --accent-purple: #9b59b6;
+      --accent-cyan: #00b0f4;
+      --text-main: #f2f3f5;
+      --text-muted: #949ba4;
+      --border-color: #262938;
+      --glass-bg: rgba(24, 27, 36, 0.85);
+      --glass-border: rgba(255, 255, 255, 0.08);
+      --shadow-sm: 0 4px 12px rgba(0, 0, 0, 0.3);
+      --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.45);
+      --radius: 12px;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      background-color: var(--bg-dark);
+      color: var(--text-main);
+      line-height: 1.6;
+      display: flex;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* Sidebar Navigation */
+    aside.sidebar {
+      width: 280px;
+      background-color: var(--bg-sidebar);
+      border-right: 1px solid var(--border-color);
+      display: flex;
+      flex-direction: column;
+      position: fixed;
+      top: 0;
+      bottom: 0;
+      left: 0;
+      z-index: 100;
+      padding: 24px 16px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 0 8px 24px 8px;
+      border-bottom: 1px solid var(--border-color);
+      margin-bottom: 20px;
+    }
+
+    .brand-icon {
+      width: 42px;
+      height: 42px;
+      background: linear-gradient(135deg, #5865f2, #23a55a);
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 22px;
+      box-shadow: 0 4px 12px rgba(88, 101, 242, 0.35);
+    }
+
+    .brand-text h1 {
+      font-size: 16px;
+      font-weight: 700;
+      letter-spacing: -0.3px;
+      color: #fff;
+    }
+
+    .brand-text span {
+      font-size: 12px;
+      color: var(--text-muted);
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .nav-section-title {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      color: var(--text-muted);
+      margin: 16px 8px 8px;
+    }
+
+    .nav-links {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .nav-link {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 12px;
+      border-radius: 8px;
+      color: var(--text-muted);
+      text-decoration: none;
+      font-size: 13.5px;
+      font-weight: 500;
+      transition: all 0.2s ease;
+    }
+
+    .nav-link:hover, .nav-link.active {
+      background-color: var(--bg-card-hover);
+      color: #fff;
+    }
+
+    .nav-link.active {
+      border-left: 3px solid var(--accent-primary);
+      background: linear-gradient(90deg, rgba(88, 101, 242, 0.15), transparent);
+    }
+
+    .bot-status-pill {
+      margin-top: auto;
+      background: rgba(35, 165, 90, 0.12);
+      border: 1px solid rgba(35, 165, 90, 0.3);
+      padding: 12px 14px;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .status-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--accent-green);
+      box-shadow: 0 0 10px var(--accent-green);
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(1.2); opacity: 0.7; }
+    }
+
+    .status-info {
+      font-size: 12px;
+    }
+
+    .status-info strong {
+      display: block;
+      color: #fff;
+    }
+
+    .status-info span {
+      color: var(--text-muted);
+      font-size: 11px;
+    }
+
+    /* Main Content Area */
+    main.content {
+      margin-left: 280px;
+      flex: 1;
+      padding: 36px 48px 80px;
+      max-width: 1300px;
+    }
+
+    /* Hero Header */
+    .hero {
+      background: linear-gradient(135deg, rgba(88, 101, 242, 0.12) 0%, rgba(35, 165, 90, 0.08) 100%);
+      border: 1px solid var(--glass-border);
+      border-radius: var(--radius);
+      padding: 36px 40px;
+      margin-bottom: 36px;
+      position: relative;
+      overflow: hidden;
+      box-shadow: var(--shadow-sm);
+    }
+
+    .hero h2 {
+      font-size: 28px;
+      font-weight: 800;
+      color: #fff;
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .hero p {
+      font-size: 15px;
+      color: var(--text-muted);
+      max-width: 800px;
+      margin-bottom: 24px;
+    }
+
+    .stats-row {
+      display: flex;
+      gap: 20px;
+      flex-wrap: wrap;
+    }
+
+    .stat-badge {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      padding: 10px 16px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+    }
+
+    .stat-badge strong {
+      color: #fff;
+    }
+
+    /* Section Styling */
+    section {
+      margin-bottom: 48px;
+      scroll-margin-top: 24px;
+    }
+
+    .section-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 20px;
+      border-bottom: 1px solid var(--border-color);
+      padding-bottom: 12px;
+    }
+
+    .section-header h3 {
+      font-size: 20px;
+      font-weight: 700;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .section-desc {
+      color: var(--text-muted);
+      font-size: 14px;
+      margin-bottom: 20px;
+    }
+
+    /* Cards Grid */
+    .grid-2 {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
+      gap: 20px;
+    }
+
+    .grid-3 {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 18px;
+    }
+
+    .card {
+      background-color: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius);
+      padding: 24px;
+      transition: all 0.25s ease;
+      position: relative;
+    }
+
+    .card:hover {
+      background-color: var(--bg-card-hover);
+      border-color: rgba(88, 101, 242, 0.4);
+      transform: translateY(-2px);
+      box-shadow: var(--shadow-sm);
+    }
+
+    .card-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: #fff;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .card p {
+      font-size: 13.5px;
+      color: var(--text-muted);
+      margin-bottom: 16px;
+    }
+
+    /* Discord Mockup Container */
+    .discord-mockup {
+      background: #1e1f22;
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius);
+      overflow: hidden;
+      box-shadow: var(--shadow-lg);
+    }
+
+    .discord-header {
+      background: #141517;
+      padding: 12px 18px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .discord-channel-list {
+      display: grid;
+      grid-template-columns: 260px 1fr;
+      min-height: 480px;
+    }
+
+    .channel-sidebar {
+      background: #2b2d31;
+      padding: 16px 12px;
+      border-right: 1px solid rgba(0, 0, 0, 0.2);
+    }
+
+    .category-title {
+      font-size: 11px;
+      font-weight: 700;
+      color: #949ba4;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .channel-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 7px 10px;
+      border-radius: 6px;
+      color: #949ba4;
+      font-size: 13px;
+      margin-bottom: 3px;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+
+    .channel-item:hover {
+      background: #35373c;
+      color: #dbdee1;
+    }
+
+    .channel-item.active {
+      background: #404249;
+      color: #fff;
+      font-weight: 500;
+    }
+
+    .channel-item.nested {
+      margin-left: 18px;
+      font-size: 12px;
+    }
+
+    .channel-chat-area {
+      background: #313338;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .discord-msg {
+      display: flex;
+      gap: 14px;
+    }
+
+    .avatar {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #5865f2, #23a55a);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 16px;
+      flex-shrink: 0;
+    }
+
+    .msg-content {
+      flex: 1;
+    }
+
+    .msg-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 4px;
+    }
+
+    .bot-tag {
+      background: #5865f2;
+      color: #fff;
+      font-size: 10px;
+      padding: 1px 5px;
+      border-radius: 4px;
+      font-weight: 600;
+    }
+
+    .msg-author {
+      font-weight: 600;
+      color: #fff;
+      font-size: 14px;
+    }
+
+    .msg-time {
+      font-size: 11px;
+      color: #949ba4;
+    }
+
+    .msg-embed {
+      background: #2b2d31;
+      border-left: 4px solid var(--accent-green);
+      border-radius: 4px;
+      padding: 12px 14px;
+      margin-top: 6px;
+      font-size: 13px;
+    }
+
+    .embed-title {
+      font-weight: 700;
+      color: #fff;
+      margin-bottom: 4px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .embed-tag {
+      display: inline-block;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+
+    .tag-open { background: rgba(35, 165, 90, 0.2); color: #23a55a; }
+    .tag-merged { background: rgba(155, 89, 182, 0.2); color: #9b59b6; }
+    .tag-repo { background: rgba(88, 101, 242, 0.2); color: #5865f2; }
+
+    /* Interactive Command Table */
+    .command-box {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius);
+      overflow: hidden;
+      margin-bottom: 20px;
+    }
+
+    .command-search {
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .search-input {
+      background: var(--bg-dark);
+      border: 1px solid var(--border-color);
+      color: #fff;
+      padding: 10px 14px;
+      border-radius: 8px;
+      width: 100%;
+      font-family: inherit;
+      font-size: 13.5px;
+      outline: none;
+      transition: border 0.2s;
+    }
+
+    .search-input:focus {
+      border-color: var(--accent-primary);
+    }
+
+    .table-responsive {
+      overflow-x: auto;
+    }
+
+    table.cmd-table {
+      width: 100%;
+      border-collapse: collapse;
+      text-align: left;
+      font-size: 13.5px;
+    }
+
+    table.cmd-table th {
+      background: rgba(255, 255, 255, 0.02);
+      padding: 12px 18px;
+      color: var(--text-muted);
+      font-weight: 600;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    table.cmd-table td {
+      padding: 14px 18px;
+      border-bottom: 1px solid var(--border-color);
+      vertical-align: middle;
+    }
+
+    table.cmd-table tr:hover td {
+      background: rgba(255, 255, 255, 0.02);
+    }
+
+    code.cmd {
+      font-family: 'JetBrains Mono', monospace;
+      background: #111319;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      padding: 4px 8px;
+      border-radius: 6px;
+      color: #5865f2;
+      font-size: 12.5px;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .copy-btn {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      font-size: 12px;
+      padding: 2px 4px;
+      border-radius: 4px;
+      transition: color 0.15s;
+    }
+
+    .copy-btn:hover {
+      color: #fff;
+    }
+
+    /* Architecture Diagram */
+    .flow-container {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius);
+      padding: 28px;
+      margin-bottom: 24px;
+    }
+
+    .flow-steps {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+
+    .flow-step {
+      flex: 1;
+      min-width: 180px;
+      background: var(--bg-dark);
+      border: 1px solid var(--border-color);
+      padding: 18px;
+      border-radius: 10px;
+      text-align: center;
+      position: relative;
+    }
+
+    .flow-step .step-icon {
+      font-size: 24px;
+      margin-bottom: 8px;
+    }
+
+    .flow-step h4 {
+      font-size: 14px;
+      color: #fff;
+      margin-bottom: 4px;
+    }
+
+    .flow-step p {
+      font-size: 11.5px;
+      color: var(--text-muted);
+    }
+
+    .flow-arrow {
+      color: var(--accent-primary);
+      font-size: 20px;
+      font-weight: 700;
+    }
+
+    /* Rule callout box */
+    .rule-callout {
+      background: rgba(88, 101, 242, 0.08);
+      border: 1px solid rgba(88, 101, 242, 0.25);
+      border-left: 4px solid var(--accent-primary);
+      padding: 16px 20px;
+      border-radius: 8px;
+      margin-bottom: 24px;
+      font-size: 13.5px;
+    }
+
+    .rule-callout strong {
+      color: #fff;
+    }
+
+    /* Responsive */
+    @media (max-width: 900px) {
+      aside.sidebar {
+        display: none;
+      }
+      main.content {
+        margin-left: 0;
+        padding: 24px;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Sidebar Navigation -->
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-icon">🚀</div>
+      <div class="brand-text">
+        <h1>GeneralsHub Bot</h1>
+        <span>RedBot 3.5.24 + GenHub</span>
+      </div>
+    </div>
+
+    <div class="nav-section-title">Navigation</div>
+    <ul class="nav-links">
+      <li><a href="#overview" class="nav-link active"><span>📊</span> System Overview</a></li>
+      <li><a href="#genhub-architecture" class="nav-link"><span>⚡</span> GenHub Architecture</a></li>
+      <li><a href="#discord-layout" class="nav-link"><span>💬</span> Discord Structure</a></li>
+      <li><a href="#notification-rules" class="nav-link"><span>🔔</span> Notification Rules</a></li>
+      <li><a href="#commands" class="nav-link"><span>⌨️</span> Command Reference</a></li>
+      <li><a href="#reconcile-engine" class="nav-link"><span>🔄</span> Reconcile Engine</a></li>
+      <li><a href="#cogs-overview" class="nav-link"><span>📦</span> Loaded RedBot Cogs</a></li>
+    </ul>
+
+    <div class="bot-status-pill">
+      <div class="status-dot"></div>
+      <div class="status-info">
+        <strong>GitHubBot#0584 Online</strong>
+        <span>Port 8080 • Shard 0 Active</span>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Main Content -->
+  <main class="content">
+
+    <!-- Hero Header -->
+    <div class="hero" id="overview">
+      <h2>🚀 GeneralsHub Bot & GenHub Cog Documentation</h2>
+      <p>
+        A specialized GitHub-to-Discord real-time orchestration engine built on top of <strong>RedBot 3.5.24</strong> (discord.py 2.7.1). It captures repository events, creates structured forum threads, manages status tags, synchronizes comments, and eliminates notification spam.
+      </p>
+      <div class="stats-row">
+        <div class="stat-badge"><span>🟢</span> Version: <strong>RedBot 3.5.24</strong></div>
+        <div class="stat-badge"><span>🌐</span> Webhook Port: <strong>0.0.0.0:8080</strong></div>
+        <div class="stat-badge"><span>📦</span> Active Cogs: <strong>23 Loaded</strong></div>
+        <div class="stat-badge"><span>⚡</span> Rate Limiter: <strong>Adaptive Backoff</strong></div>
+      </div>
+    </div>
+
+    <!-- Rule Callout -->
+    <div class="rule-callout" id="notification-rules">
+      <strong>🔔 Active Notification Policy:</strong> Role mentions (<code>@Contributor</code>) are exclusively triggered when a <strong>New PR is Opened</strong> or an existing <strong>PR is Merged</strong>. Issues, closed unmerged PRs, review comments, and reconciliation updates generate threads cleanly without ping spam.
+    </div>
+
+    <!-- GenHub Event Flow -->
+    <section id="genhub-architecture">
+      <div class="section-header">
+        <h3>⚡ Real-Time Ingestion Architecture</h3>
+      </div>
+      <p class="section-desc">
+        How GitHub webhook payloads flow through the local server, get validated, rate-limited, and dispatched to Discord forums and chats.
+      </p>
+
+      <div class="flow-container">
+        <div class="flow-steps">
+          <div class="flow-step">
+            <div class="step-icon">🐙</div>
+            <h4>GitHub Event</h4>
+            <p>Webhook triggered on PR, Issue, Comment, Review</p>
+          </div>
+          <div class="flow-arrow">→</div>
+          <div class="flow-step">
+            <div class="step-icon">🛡️</div>
+            <h4>Webhook Server</h4>
+            <p>Port 8080 (/github, /webhook) with HMAC validation</p>
+          </div>
+          <div class="flow-arrow">→</div>
+          <div class="flow-step">
+            <div class="step-icon">⚙️</div>
+            <h4>Event Handler</h4>
+            <p>2s Review batching & tag computation</p>
+          </div>
+          <div class="flow-arrow">→</div>
+          <div class="flow-step">
+            <div class="step-icon">💬</div>
+            <h4>Discord Forums</h4>
+            <p>Thread [GH] [#N] created in issues/PR feed</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Discord Layout Visualizer -->
+    <section id="discord-layout">
+      <div class="section-header">
+        <h3>💬 GeneralsHub Channel Mapping</h3>
+      </div>
+      <p class="section-desc">
+        Visual representation of your server layout and how each Discord channel interacts with the bot.
+      </p>
+
+      <div class="discord-mockup">
+        <div class="discord-header">
+          <span style="font-weight:700; color:#fff; font-size:14px;">🚀 GeneralsHub Discord</span>
+          <span style="color:#949ba4; font-size:12px;">ID: 1420182734986543264</span>
+        </div>
+        <div class="discord-channel-list">
+          <div class="channel-sidebar">
+            <div class="category-title">▼ GeneralsHub</div>
+            <div class="channel-item"><span>#</span> [ 🗨️ ] genhub-chat</div>
+            <div class="channel-item"><span>📁</span> [ 🧭 ] guide</div>
+            <div class="channel-item nested"><span>📌</span> [ 📌 ] pinned updates</div>
+            <div class="channel-item"><span>📁</span> [ ✨ ] github-issues-feed</div>
+            <div class="channel-item nested"><span>🗨️</span> Issues Chat</div>
+            <div class="channel-item active"><span>📁</span> [ ♻️ ] pull-requests-feed</div>
+            <div class="channel-item nested"><span>🗨️</span> Pull Requests Chat</div>
+            <div class="channel-item"><span>📁</span> [ 🗣️ ] feedback</div>
+            <div class="channel-item"><span>📢</span> [ 📣 ] hub-announcements</div>
+          </div>
+
+          <div class="channel-chat-area">
+            <div class="discord-msg">
+              <div class="avatar">GH</div>
+              <div class="msg-content">
+                <div class="msg-header">
+                  <span class="msg-author">GitHubBot</span>
+                  <span class="bot-tag">BOT</span>
+                  <span class="msg-time">Today at 11:25 PM</span>
+                </div>
+                <div style="font-size:13.5px; color:#dbdee1;">
+                  🆕 <strong>PR created:</strong> <a href="#" style="color:#00b0f4; text-decoration:none;">Launcher Patch v1.0.5</a><br>
+                  👤 By: <strong>undead2146</strong> <span style="background:rgba(88,101,242,0.3); color:#c9cdfb; padding:1px 4px; border-radius:3px; font-size:12px;">@Contributor</span>
+                </div>
+                <div class="msg-embed">
+                  <div class="embed-title">
+                    <span class="embed-tag tag-open">Open</span>
+                    <span class="embed-tag tag-repo">GenHub</span>
+                    <span>Thread: [GH] [#104] Launcher Patch v1.0.5</span>
+                  </div>
+                  <div style="color:#949ba4; font-size:12px; margin-top:4px;">
+                    • Fixed community map download timeout<br>
+                    • Updated Zero Hour direct launch args
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="discord-msg">
+              <div class="avatar" style="background:#23a55a;">GH</div>
+              <div class="msg-content">
+                <div class="msg-header">
+                  <span class="msg-author">GitHubBot</span>
+                  <span class="bot-tag">BOT</span>
+                  <span class="msg-time">Today at 11:28 PM</span>
+                </div>
+                <div style="font-size:13.5px; color:#dbdee1;">
+                  ✅ <strong>PR merged:</strong> <a href="#" style="color:#00b0f4; text-decoration:none;">Launcher Patch v1.0.5</a><br>
+                  👤 By: <strong>undead2146</strong> <span style="background:rgba(88,101,242,0.3); color:#c9cdfb; padding:1px 4px; border-radius:3px; font-size:12px;">@Contributor</span>
+                </div>
+                <div class="msg-embed" style="border-left-color: #9b59b6;">
+                  <div class="embed-title">
+                    <span class="embed-tag tag-merged">Merged</span>
+                    <span class="embed-tag tag-repo">GenHub</span>
+                    <span>Status tag updated to Merged</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Command Reference -->
+    <section id="commands">
+      <div class="section-header">
+        <h3>⌨️ GenHub Command Reference</h3>
+      </div>
+      <p class="section-desc">
+        All bot management commands can be executed by server owners in Discord using the <code>!</code> prefix or via slash command.
+      </p>
+
+      <div class="command-box">
+        <div class="command-search">
+          <span>🔍</span>
+          <input type="text" id="cmdSearch" class="search-input" placeholder="Search commands by name or description..." onkeyup="filterCommands()">
+        </div>
+        <div class="table-responsive">
+          <table class="cmd-table" id="commandTable">
+            <thead>
+              <tr>
+                <th>Command</th>
+                <th>Arguments</th>
+                <th>Description</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><code class="cmd">!genhub showconfig</code></td>
+                <td>None</td>
+                <td>Displays active webhook ports, forum IDs, tracked repos, and token status</td>
+                <td><button class="copy-btn" onclick="copyText('!genhub showconfig')">📋 Copy</button></td>
+              </tr>
+              <tr>
+                <td><code class="cmd">!genhub reconcile</code></td>
+                <td><code>[repo_name]</code></td>
+                <td>Scans GitHub API and synchronizes all open PRs, issues, and comments</td>
+                <td><button class="copy-btn" onclick="copyText('!genhub reconcile')">📋 Copy</button></td>
+              </tr>
+              <tr>
+                <td><code class="cmd">!genhub addrepo</code></td>
+                <td><code>&lt;owner/repo&gt;</code></td>
+                <td>Adds a repository to the tracked allowlist (e.g., <code>community-outpost/GenHub</code>)</td>
+                <td><button class="copy-btn" onclick="copyText('!genhub addrepo community-outpost/GenHub')">📋 Copy</button></td>
+              </tr>
+              <tr>
+                <td><code class="cmd">!genhub removerepo</code></td>
+                <td><code>&lt;owner/repo&gt;</code></td>
+                <td>Removes a repository from the tracked allowlist</td>
+                <td><button class="copy-btn" onclick="copyText('!genhub removerepo community-outpost/GenHub')">📋 Copy</button></td>
+              </tr>
+              <tr>
+                <td><code class="cmd">!genhub issuesforum</code></td>
+                <td><code>&lt;forum_id&gt;</code></td>
+                <td>Sets the Forum channel ID for GitHub Issues (<code>github-issues-feed</code>)</td>
+                <td><button class="copy-btn" onclick="copyText('!genhub issuesforum ')">📋 Copy</button></td>
+              </tr>
+              <tr>
+                <td><code class="cmd">!genhub prsforum</code></td>
+                <td><code>&lt;forum_id&gt;</code></td>
+                <td>Sets the Forum channel ID for Pull Requests (<code>pull-requests-feed</code>)</td>
+                <td><button class="copy-btn" onclick="copyText('!genhub prsforum ')">📋 Copy</button></td>
+              </tr>
+              <tr>
+                <td><code class="cmd">!genhub logchannel</code></td>
+                <td><code>&lt;channel_id&gt;</code></td>
+                <td>Sets the error and alert logging channel (<code>genhub-chat</code>)</td>
+                <td><button class="copy-btn" onclick="copyText('!genhub logchannel ')">📋 Copy</button></td>
+              </tr>
+              <tr>
+                <td><code class="cmd">!genhub issuesfeedchat</code></td>
+                <td><code>&lt;channel_id&gt;</code></td>
+                <td>Sets the text channel for Issues chat feed notifications</td>
+                <td><button class="copy-btn" onclick="copyText('!genhub issuesfeedchat ')">📋 Copy</button></td>
+              </tr>
+              <tr>
+                <td><code class="cmd">!genhub prsfeedchat</code></td>
+                <td><code>&lt;channel_id&gt;</code></td>
+                <td>Sets the text channel for PRs chat feed notifications</td>
+                <td><button class="copy-btn" onclick="copyText('!genhub prsfeedchat ')">📋 Copy</button></td>
+              </tr>
+              <tr>
+                <td><code class="cmd">!genhub contributorrole</code></td>
+                <td><code>&lt;role_id&gt;</code></td>
+                <td>Sets the role ID to tag on new PR opens and merges</td>
+                <td><button class="copy-btn" onclick="copyText('!genhub contributorrole ')">📋 Copy</button></td>
+              </tr>
+              <tr>
+                <td><code class="cmd">!genhub token</code></td>
+                <td><code>&lt;token&gt;</code></td>
+                <td>Configures the GitHub API Personal Access Token</td>
+                <td><button class="copy-btn" onclick="copyText('!genhub token ')">📋 Copy</button></td>
+              </tr>
+              <tr>
+                <td><code class="cmd">!genhub testrepo</code></td>
+                <td><code>&lt;owner/repo&gt;</code></td>
+                <td>Tests API reachability and permissions for a repository</td>
+                <td><button class="copy-btn" onclick="copyText('!genhub testrepo ')">📋 Copy</button></td>
+              </tr>
+              <tr>
+                <td><code class="cmd">!genhub clearcache</code></td>
+                <td>None</td>
+                <td>Clears in-memory thread cache to force fresh lookups</td>
+                <td><button class="copy-btn" onclick="copyText('!genhub clearcache')">📋 Copy</button></td>
+              </tr>
+              <tr>
+                <td><code class="cmd">/genhubconfig</code></td>
+                <td>Slash UI</td>
+                <td>Modal interface to autofill and configure all parameters at once</td>
+                <td><button class="copy-btn" onclick="copyText('/genhubconfig')">📋 Copy</button></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- Reconcile Engine Section -->
+    <section id="reconcile-engine">
+      <div class="section-header">
+        <h3>🔄 Reconciliation & Rate Limiter Engine</h3>
+      </div>
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-title"><span>🛡️</span> Open PR Filtering Rule</div>
+          <p>
+            Reconciliation only fetches and creates threads for <strong>active OPEN PRs</strong>. Historical closed and merged pull requests are ignored during thread generation to maintain a lean, clean forum layout.
+          </p>
+          <ul style="color:var(--text-muted); font-size:13px; margin-left:18px;">
+            <li>Zero clutter from months of closed PRs</li>
+            <li>Existing closed threads are safely preserved</li>
+            <li>Tags are synced dynamically</li>
+          </ul>
+        </div>
+
+        <div class="card">
+          <div class="card-title"><span>⏳</span> Exponential Rate Limiting</div>
+          <p>
+            The built-in <code>RateLimiter</code> tracks GitHub API response headers (<code>X-RateLimit-Remaining</code> and <code>X-RateLimit-Reset</code>) and paces requests with automatic exponential backoff.
+          </p>
+          <ul style="color:var(--text-muted); font-size:13px; margin-left:18px;">
+            <li>0.75s minimum interval between calls</li>
+            <li>Automatic sleep when approaching limits</li>
+            <li>Prevents 403 Secondary Rate Limit errors</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- RedBot Loaded Cogs Overview -->
+    <section id="cogs-overview">
+      <div class="section-header">
+        <h3>📦 Active RedBot 3.5.24 Cogs</h3>
+      </div>
+      <p class="section-desc">
+        Complete overview of the 23 loaded packages providing modular management, moderation, and utility features.
+      </p>
+
+      <div class="grid-3">
+        <div class="card">
+          <div class="card-title"><span>🐙</span> GenHub</div>
+          <p>GitHub Webhook & Forum router for issues, PRs, comments, and reviews.</p>
+        </div>
+        <div class="card">
+          <div class="card-title"><span>🛡️</span> Mod & ModLog</div>
+          <p>Complete moderation suite with kicks, bans, mutes, warnings, and audit cases.</p>
+        </div>
+        <div class="card">
+          <div class="card-title"><span>🎵</span> Audio & Streams</div>
+          <p>Music playback management, YouTube / Twitch notifications and alerts.</p>
+        </div>
+        <div class="card">
+          <div class="card-title"><span>💰</span> Economy & Bank</div>
+          <p>Virtual currency, payday rewards, bank accounts, and leaderboards.</p>
+        </div>
+        <div class="card">
+          <div class="card-title"><span>⚡</span> CustomCommands</div>
+          <p>Create dynamic custom responses, text triggers, and macro templates.</p>
+        </div>
+        <div class="card">
+          <div class="card-title"><span>🧹</span> Cleanup & Filter</div>
+          <p>Automated chat filtering, anti-spam, and mass message deletion utilities.</p>
+        </div>
+        <div class="card">
+          <div class="card-title"><span>🔐</span> Permissions</div>
+          <p>Granular rule-based permissions for users, roles, and server channels.</p>
+        </div>
+        <div class="card">
+          <div class="card-title"><span>📥</span> Downloader</div>
+          <p>Install, update, and manage 3rd party community cogs and extensions.</p>
+        </div>
+        <div class="card">
+          <div class="card-title"><span>🎲</span> Trivia & Image</div>
+          <p>Interactive games, trivia sessions, and image generation/editing commands.</p>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <script>
+    function filterCommands() {
+      const query = document.getElementById('cmdSearch').value.toLowerCase();
+      const rows = document.querySelectorAll('#commandTable tbody tr');
+      rows.forEach(row => {
+        const text = row.innerText.toLowerCase();
+        row.style.display = text.includes(query) ? '' : 'none';
+      });
+    }
+
+    function copyText(text) {
+      navigator.clipboard.writeText(text).then(() => {
+        alert('Copied to clipboard: ' + text);
+      });
+    }
+
+    // Highlight active link on scroll
+    window.addEventListener('scroll', () => {
+      const sections = document.querySelectorAll('section, div.hero, div.rule-callout');
+      const navLinks = document.querySelectorAll('.nav-link');
+      let current = '';
+
+      sections.forEach(section => {
+        const sectionTop = section.offsetTop;
+        if (pageYOffset >= sectionTop - 60) {
+          current = section.getAttribute('id');
+        }
+      });
+
+      navLinks.forEach(link => {
+        link.classList.remove('active');
+        if (link.getAttribute('href') === '#' + current) {
+          link.classList.add('active');
+        }
+      });
+    });
+  </script>
+</body>
+</html>
