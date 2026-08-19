@@ -13,14 +13,19 @@ class WebhookServer:
     async def start(self):
         host = await self.cog.config.webhook_host()
         port = await self.cog.config.webhook_port()
-        app = web.Application()
+        async def handle_root(request: web.Request):
+            return web.Response(text="GenHub Webhook Server OK")
+
+        async def handle_health(request: web.Request):
+            return web.Response(text="OK")
+
         app.router.add_post("/github", self.webhook_handler)
         app.router.add_post("/webhook", self.webhook_handler)
         app.router.add_post("/", self.webhook_handler)
-        app.router.add_get("/", lambda r: web.Response(text="GenHub Webhook Server OK"))
-        app.router.add_get("/health", lambda r: web.Response(text="OK"))
-        app.router.add_get("/webhook", lambda r: web.Response(text="GenHub Webhook Server OK"))
-        app.router.add_get("/github", lambda r: web.Response(text="GenHub Webhook Server OK"))
+        app.router.add_get("/", handle_root)
+        app.router.add_get("/health", handle_health)
+        app.router.add_get("/webhook", handle_root)
+        app.router.add_get("/github", handle_root)
         self.runner = web.AppRunner(app)
         await self.runner.setup()
         self.server = web.TCPSite(self.runner, host, port)
