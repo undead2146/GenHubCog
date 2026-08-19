@@ -74,38 +74,31 @@ class SlashCommands:
         contributor_role: discord.Role = None,
         tracked_repo: str = None,
         updates_channel: discord.abc.GuildChannel = None,
+        issues_chat: discord.abc.GuildChannel = None,
+        prs_chat: discord.abc.GuildChannel = None,
     ):
         """Configure GenHub using Discord native dropdown selectors."""
         summary = ["✅ **GenHub Configuration Updated via Slash UI:**", ""]
-        from .utils import find_associated_chat_channel, find_associated_updates_channel
 
         if issues_forum:
             await self.cog.config.issues_forum_id.set(issues_forum.id)
             summary.append(f"• **Issues Forum:** {issues_forum.mention} (`{issues_forum.id}`)")
-            if interaction.guild:
-                auto_chat = find_associated_chat_channel(interaction.guild, issues_forum, is_pr=False)
-                if auto_chat:
-                    await self.cog.config.issues_feed_chat_id.set(auto_chat.id)
-                    summary.append(f"  ↳ 🔗 *Auto-linked Issues Chat:* {auto_chat.mention} (`{auto_chat.id}`)")
+
+        if issues_chat:
+            await self.cog.config.issues_feed_chat_id.set(issues_chat.id)
+            summary.append(f"• **Issues Feed Chat / Post:** {issues_chat.mention} (`{issues_chat.id}`)")
 
         if prs_forum:
             await self.cog.config.prs_forum_id.set(prs_forum.id)
             summary.append(f"• **PRs Forum:** {prs_forum.mention} (`{prs_forum.id}`)")
-            if interaction.guild:
-                auto_chat = find_associated_chat_channel(interaction.guild, prs_forum, is_pr=True)
-                if auto_chat:
-                    await self.cog.config.prs_feed_chat_id.set(auto_chat.id)
-                    summary.append(f"  ↳ 🔗 *Auto-linked PRs Chat:* {auto_chat.mention} (`{auto_chat.id}`)")
 
-        # Auto-detect updates feed if not passed
-        updates_target = updates_channel
-        if not updates_target and interaction.guild:
-            ref_forum = prs_forum or issues_forum
-            updates_target = find_associated_updates_channel(interaction.guild, ref_forum)
+        if prs_chat:
+            await self.cog.config.prs_feed_chat_id.set(prs_chat.id)
+            summary.append(f"• **PRs Feed Chat / Post:** {prs_chat.mention} (`{prs_chat.id}`)")
 
-        if updates_target:
-            await self.cog.config.updates_channel_id.set(updates_target.id)
-            summary.append(f"• **Pinned Updates Feed:** {updates_target.mention} (`{updates_target.id}`)")
+        if updates_channel:
+            await self.cog.config.updates_channel_id.set(updates_channel.id)
+            summary.append(f"• **Pinned Updates Feed:** {updates_channel.mention} (`{updates_channel.id}`)")
 
         if log_channel:
             await self.cog.config.log_channel_id.set(log_channel.id)

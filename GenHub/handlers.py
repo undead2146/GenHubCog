@@ -81,12 +81,26 @@ class GitHubEventHandlers:
         except Exception:
             return None
 
+    async def _resolve_target_channel(self, channel_id: int):
+        """Retrieve a Discord TextChannel, ForumChannel, or Thread (Forum Post) reliably."""
+        if not channel_id:
+            return None
+        ch = self.cog.bot.get_channel(channel_id)
+        if ch:
+            return ch
+        if hasattr(self.cog.bot, "fetch_channel"):
+            try:
+                return await self.cog.bot.fetch_channel(channel_id)
+            except Exception:
+                pass
+        return None
+
     async def log_error(self, message: str):
         """Log errors to console and optionally to a Discord log channel."""
         print(f"❌ GenHub Error: {message}")
         log_channel_id = await self.cog.config.log_channel_id()
         if log_channel_id:
-            channel = self.cog.bot.get_channel(log_channel_id)
+            channel = await self._resolve_target_channel(log_channel_id)
             if channel:
                 try:
                     await channel.send(f"❌ **GenHub Error:**\n```{message[:1900]}```")
@@ -276,7 +290,7 @@ class GitHubEventHandlers:
         # Send concise overview notification to Issues Feed Chat channel (if configured)
         issues_chat_id = await self._get_config_id("issues_feed_chat_id")
         if issues_chat_id:
-            chat_ch = self.cog.bot.get_channel(issues_chat_id)
+            chat_ch = await self._resolve_target_channel(issues_chat_id)
             if chat_ch:
                 thread_ref = f"<#{thread.id}>" if thread else ""
                 thread_suffix = f" • Thread: {thread_ref}" if thread_ref else ""
@@ -301,7 +315,7 @@ class GitHubEventHandlers:
         )
 
         forum_id = await self.cog.config.prs_forum_id()
-        forum = self.cog.bot.get_channel(forum_id)
+        forum = await self._resolve_target_channel(forum_id)
         tags = await get_pr_tags(forum, pr)
 
         # Role mention for PRs: only when opened or merged
@@ -343,7 +357,7 @@ class GitHubEventHandlers:
         # Send concise overview notification to PRs Feed Chat channel (if configured)
         prs_chat_id = await self._get_config_id("prs_feed_chat_id")
         if prs_chat_id:
-            chat_ch = self.cog.bot.get_channel(prs_chat_id)
+            chat_ch = await self._resolve_target_channel(prs_chat_id)
             if chat_ch:
                 thread_ref = f"<#{thread.id}>" if thread else ""
                 thread_suffix = f" • Thread: {thread_ref}" if thread_ref else ""
@@ -365,7 +379,7 @@ class GitHubEventHandlers:
             base_ref = pr.get("base", {}).get("ref", "main")
             updates_ch_id = await self._get_config_id("updates_channel_id")
             if updates_ch_id:
-                updates_ch = self.cog.bot.get_channel(updates_ch_id)
+                updates_ch = await self._resolve_target_channel(updates_ch_id)
                 if updates_ch:
                     try:
                         thread_ref = f" • Thread: <#{thread.id}>" if thread else ""
@@ -391,7 +405,7 @@ class GitHubEventHandlers:
 
         updates_ch_id = await self._get_config_id("updates_channel_id")
         if updates_ch_id:
-            updates_ch = self.cog.bot.get_channel(updates_ch_id)
+            updates_ch = await self._resolve_target_channel(updates_ch_id)
             if updates_ch:
                 try:
                     clean_body = clean_github_markdown(body)

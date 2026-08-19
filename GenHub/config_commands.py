@@ -28,9 +28,12 @@ class ConfigCommands(commands.Cog):
         if text.isdigit():
             return int(text)
         if guild:
-            for ch in guild.channels:
+            for ch in getattr(guild, "channels", []):
                 if ch.name.lower() == text.lower().lstrip("#"):
                     return ch.id
+            for th in getattr(guild, "threads", []):
+                if th.name.lower() == text.lower().lstrip("#"):
+                    return th.id
         return None
 
     def _resolve_role_id(self, guild, text: str):
@@ -136,40 +139,19 @@ class ConfigCommands(commands.Cog):
         role_id = self._resolve_role_id(ctx.guild, contributor_role)
         updates_cid = self._resolve_channel_id(ctx.guild, updates_channel)
 
-        summary = ["✅ **GenHub All-In-One Setup Complete!**", ""]
-
-        from .utils import find_associated_chat_channel, find_associated_updates_channel
+        summary = ["✅ **GenHub Configuration Updated!**", ""]
 
         if issues_fid:
             await self.cog.config.issues_forum_id.set(issues_fid)
             summary.append(f"• **Issues Forum:** <#{issues_fid}> (`{issues_fid}`)")
-            if ctx.guild:
-                forum_ch = ctx.guild.get_channel(issues_fid)
-                auto_chat = find_associated_chat_channel(ctx.guild, forum_ch, is_pr=False)
-                if auto_chat:
-                    await self.cog.config.issues_feed_chat_id.set(auto_chat.id)
-                    summary.append(f"  ↳ 🔗 *Auto-linked Issues Chat:* {auto_chat.mention} (`{auto_chat.id}`)")
-        else:
+        elif issues_forum and issues_forum.lower() not in ("skip", "none"):
             summary.append(f"• **Issues Forum:** ⚠️ Could not resolve `{issues_forum}`")
 
         if prs_fid:
             await self.cog.config.prs_forum_id.set(prs_fid)
             summary.append(f"• **PRs Forum:** <#{prs_fid}> (`{prs_fid}`)")
-            if ctx.guild:
-                forum_ch = ctx.guild.get_channel(prs_fid)
-                auto_chat = find_associated_chat_channel(ctx.guild, forum_ch, is_pr=True)
-                if auto_chat:
-                    await self.cog.config.prs_feed_chat_id.set(auto_chat.id)
-                    summary.append(f"  ↳ 🔗 *Auto-linked PRs Chat:* {auto_chat.mention} (`{auto_chat.id}`)")
-        else:
+        elif prs_forum and prs_forum.lower() not in ("skip", "none"):
             summary.append(f"• **PRs Forum:** ⚠️ Could not resolve `{prs_forum}`")
-
-        # Auto-detect updates feed if not explicitly given
-        if not updates_cid and ctx.guild:
-            ref_ch = ctx.guild.get_channel(prs_fid) if prs_fid else None
-            auto_updates = find_associated_updates_channel(ctx.guild, ref_ch)
-            if auto_updates:
-                updates_cid = auto_updates.id
 
         if updates_cid:
             await self.cog.config.updates_channel_id.set(updates_cid)
@@ -243,43 +225,27 @@ class ConfigCommands(commands.Cog):
 
     @genhub.command()
     async def issuesforum(self, ctx, forum_id: int):
-        """Set the Issues forum channel ID (and auto-detect associated chat)."""
+        """Set the Issues forum channel ID."""
         await self._set_config(ctx, "issues_forum_id", forum_id)
-        guild = getattr(ctx, "guild", None)
-        if guild and hasattr(guild, "get_channel"):
-            forum_ch = guild.get_channel(forum_id)
-            from .utils import find_associated_chat_channel
-            auto_chat = find_associated_chat_channel(guild, forum_ch, is_pr=False)
-            if auto_chat:
-                await self.cog.config.issues_feed_chat_id.set(auto_chat.id)
-                await ctx.send(f"🔗 Auto-detected Issues Chat Channel: {auto_chat.mention} (`{auto_chat.id}`)")
 
     @genhub.command()
     async def prsforum(self, ctx, forum_id: int):
-        """Set the Pull Requests forum channel ID (and auto-detect associated chat)."""
+        """Set the Pull Requests forum channel ID."""
         await self._set_config(ctx, "prs_forum_id", forum_id)
-        guild = getattr(ctx, "guild", None)
-        if guild and hasattr(guild, "get_channel"):
-            forum_ch = guild.get_channel(forum_id)
-            from .utils import find_associated_chat_channel
-            auto_chat = find_associated_chat_channel(guild, forum_ch, is_pr=True)
-            if auto_chat:
-                await self.cog.config.prs_feed_chat_id.set(auto_chat.id)
-                await ctx.send(f"🔗 Auto-detected PRs Chat Channel: {auto_chat.mention} (`{auto_chat.id}`)")
 
     @genhub.command()
     async def issuesfeedchat(self, ctx, channel_id: int):
-        """Set the Issues Feed Chat channel ID."""
+        """Set the Issues Feed Chat channel or Forum Post ID."""
         await self._set_config(ctx, "issues_feed_chat_id", channel_id)
 
     @genhub.command()
     async def prsfeedchat(self, ctx, channel_id: int):
-        """Set the PR Feed Chat channel ID."""
+        """Set the PR Feed Chat channel or Forum Post ID."""
         await self._set_config(ctx, "prs_feed_chat_id", channel_id)
 
     @genhub.command(aliases=["updateschannel", "updatesforum", "updatesfeed", "pinnedupdates"])
     async def updates(self, ctx, channel_id: int):
-        """Set the Pinned Updates channel / forum post ID for development and release announcements."""
+        """Set the Pinned Updates channel or Forum Post ID for development and release announcements."""
         await self._set_config(ctx, "updates_channel_id", channel_id)
 
     @genhub.command(aliases=["openprs", "pulls", "prs"])

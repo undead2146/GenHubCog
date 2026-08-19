@@ -958,10 +958,10 @@
     <!-- Interactive 1-Line Setup Generator -->
     <section id="all-in-one-setup">
       <div class="section-header">
-        <h3>🎯 All-In-One Setup Command Generator (with Auto-Chat Detection)</h3>
+        <h3>🎯 All-In-One Setup Command Generator</h3>
       </div>
       <p class="section-desc">
-        When you link a forum channel, GenHub <strong>heuristically discovers and links</strong> the accompanying text chat channel (e.g. <code>issues-chat</code> / <code>pull-requests-chat</code>). Fill in your details below to generate your custom setup command:
+        Configure your forums, chat feeds, and pinned updates in one step. GenHub natively supports both <strong>Text Channels</strong> and <strong>Forum Posts (Threads)</strong> by ID or mention without intrusive background guesswork.
       </p>
 
       <div class="generator-card">
@@ -987,7 +987,7 @@
             <input type="text" id="genRepo" value="community-outpost/GenHub" placeholder="community-outpost/GenHub">
           </div>
           <div class="input-group">
-            <label>6. Pinned Updates (# or ID)</label>
+            <label>6. Pinned Updates Post/Channel (# or ID)</label>
             <input type="text" id="genUpdates" value="#pinned-updates" placeholder="#pinned-updates">
           </div>
         </div>
@@ -1005,7 +1005,7 @@
         <div class="card">
           <div class="card-title"><span>🧙</span> Method B: Interactive Wizard in Discord</div>
           <p>
-            Type <code class="cmd">!genhub setup</code> with <strong>no arguments</strong>. The bot will guide you step-by-step in chat and automatically detect associated chat channels!
+            Type <code class="cmd">!genhub setup</code> with <strong>no arguments</strong>. The bot will guide you step-by-step in chat. You can mention channels, paste IDs, or type <code>skip</code>.
           </p>
           <div class="code-block" data-copy="!genhub setup">
             <span>!genhub setup</span>
