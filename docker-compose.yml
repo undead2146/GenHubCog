@@ -13,6 +13,8 @@ services:
     volumes:
       - ./redbot-data:/home/redbot/redbot-data
       - .:/home/redbot/GenHubCog
+      - ./GenHub:/home/redbot/.local/lib/python3.11/site-packages/redbot/cogs/GenHub
+      - ./docker-entrypoint.sh:/home/redbot/docker-entrypoint.sh
     networks:
       - redbot-network
 

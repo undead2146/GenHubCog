@@ -481,3 +481,117 @@ async def test_handler_logging_levels():
     await handler.log_error("test error 2")
     assert log_ch.send.await_count == 5
 
+
+@pytest.mark.asyncio
+async def test_handle_issue_comment_edited_and_deleted():
+    cog = Mock()
+    cog.config = Mock()
+    cog.config.issues_forum_id = AsyncMock(return_value=123)
+    cog.config.prs_forum_id = AsyncMock(return_value=456)
+    cog.config.contributor_role_id = AsyncMock(return_value=None)
+    cog.config.log_channel_id = AsyncMock(return_value=789)
+    cog.config.log_level = AsyncMock(return_value="info")
+
+    mock_msg = AsyncMock()
+    mock_msg.edit = AsyncMock()
+    mock_msg.delete = AsyncMock()
+
+    mock_thread = AsyncMock()
+    mock_thread.guild = Mock()
+    mock_forum = Mock()
+    mock_forum.available_tags = []
+    mock_forum.create_tag = AsyncMock()
+    cog.bot = Mock()
+    cog.bot.get_channel = Mock(return_value=mock_forum)
+    cog.thread_cache = {}
+
+    handler = GitHubEventHandlers(cog)
+
+    issue = {"number": 1, "title": "Test Issue", "html_url": "http://url", "user": {"login": "a"}, "state": "open"}
+    comment = {"body": "updated body", "user": {"login": "me"}, "html_url": "http://url#issuecomment-1"}
+
+    # Test Comment Edited
+    with patch("GenHub.handlers.find_thread", new_callable=AsyncMock, return_value=mock_thread), \
+         patch("GenHub.handlers.find_comment_message", new_callable=AsyncMock, return_value=mock_msg):
+        data_edit = {"action": "edited", "issue": issue, "comment": comment}
+        await handler.handle_issue_comment(data_edit, "owner/repo")
+        mock_msg.edit.assert_awaited_once()
+
+    # Test Comment Deleted
+    mock_thread.id = 55555
+    with patch("GenHub.handlers.find_thread", new_callable=AsyncMock, return_value=mock_thread), \
+         patch("GenHub.handlers.find_comment_message", new_callable=AsyncMock, return_value=mock_msg), \
+         patch.object(handler, "log_info", new_callable=AsyncMock) as mock_log_info:
+        data_del = {
+            "action": "deleted",
+            "issue": issue,
+            "comment": {"body": "Found 0 issues in 14 files.", "user": {"login": "deepsource-io[bot]"}, "html_url": "http://url#issuecomment-1"},
+            "sender": {"login": "undead2146"},
+        }
+        await handler.handle_issue_comment(data_del, "owner/repo")
+        mock_msg.delete.assert_awaited_once()
+        mock_log_info.assert_awaited_once()
+        log_text = mock_log_info.await_args[0][0]
+        assert "💬 🗑️ **Comment Deleted:** `repo` [Issue #1](<http://url#issuecomment-1>) • <#55555> • \"Found 0 issues in 14 files.\" • By 👤 **undead2146** (Author: 🤖 **deepsource-io[bot]**)" == log_text
+
+
+@pytest.mark.asyncio
+async def test_handle_pr_review_comment_edited_and_deleted():
+    cog = Mock()
+    cog.config = Mock()
+    cog.config.prs_forum_id = AsyncMock(return_value=456)
+    cog.config.log_channel_id = AsyncMock(return_value=789)
+    cog.config.log_level = AsyncMock(return_value="info")
+
+    mock_msg = AsyncMock()
+    mock_msg.edit = AsyncMock()
+    mock_msg.delete = AsyncMock()
+
+    mock_thread = AsyncMock()
+    mock_thread.id = 77777
+    cog.bot = Mock()
+    cog.thread_cache = {}
+
+    handler = GitHubEventHandlers(cog)
+
+    pr = {"number": 99, "title": "Test PR", "html_url": "http://pr/99"}
+    comment = {"body": "updated review note", "user": {"login": "reviewer"}, "html_url": "http://pr/99#discussion_r1", "pull_request_review_id": 10, "path": "GenHub/utils.py", "line": 643}
+
+    # Test Review Comment Edited
+    with patch("GenHub.handlers.find_thread", new_callable=AsyncMock, return_value=mock_thread), \
+         patch("GenHub.handlers.find_comment_message", new_callable=AsyncMock, return_value=mock_msg):
+        data_edit = {"action": "edited", "pull_request": pr, "comment": comment}
+        await handler.handle_pull_request_review_comment(data_edit, "owner/repo")
+        mock_msg.edit.assert_awaited_once()
+
+    # Test Review Comment Deleted
+    with patch("GenHub.handlers.find_thread", new_callable=AsyncMock, return_value=mock_thread), \
+         patch("GenHub.handlers.find_comment_message", new_callable=AsyncMock, return_value=mock_msg), \
+         patch.object(handler, "log_info", new_callable=AsyncMock) as mock_log_info:
+        data_del = {
+            "action": "deleted",
+            "pull_request": pr,
+            "comment": comment,
+            "sender": {"login": "undead2146"},
+        }
+        await handler.handle_pull_request_review_comment(data_del, "owner/repo")
+        mock_msg.delete.assert_awaited_once()
+        mock_log_info.assert_awaited_once()
+        log_text = mock_log_info.await_args[0][0]
+        assert "📝 🗑️ **Review Comment Deleted:** `repo` [PR #99](<http://pr/99#discussion_r1>) • <#77777> • `GenHub/utils.py:643` • \"updated review note\" • By 👤 **undead2146** (Author: 👤 **reviewer**)" == log_text
+
+
+@pytest.mark.asyncio
+async def test_bot_edit_debouncing():
+    cog = Mock()
+    handler = GitHubEventHandlers(cog)
+
+    # First bot edit passes
+    assert handler._should_log_bot_edit("owner/repo", 1, "deepsource-io[bot]") is True
+    # Immediate second bot edit within 5s is debounced (returns False)
+    assert handler._should_log_bot_edit("owner/repo", 1, "deepsource-io[bot]") is False
+
+    # Human edits are never debounced
+    assert handler._should_log_bot_edit("owner/repo", 1, "bobtista") is True
+    assert handler._should_log_bot_edit("owner/repo", 1, "bobtista") is True
+

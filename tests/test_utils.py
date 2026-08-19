@@ -244,3 +244,129 @@ async def test_utils_find_thread_forum_none():
     bot.get_channel = Mock(return_value=None)
     res = await utils.find_thread(bot, 1, "owner/repo", 1, {})
     assert res is None
+
+
+def test_format_comment_preview():
+    # 1. HTML comment stripping and text cleaning
+    raw1 = "<!-- deepsource-ignore --> Found 0 issues in 14 files."
+    assert utils.format_comment_preview(raw1) == '"Found 0 issues in 14 files."'
+
+    # 2. Markdown headers and length truncation
+    raw2 = "### Summary\nThis is a long review description that should get truncated properly."
+    assert utils.format_comment_preview(raw2, max_len=30) == '"Summary This is a long revi..."'
+
+    # 3. Empty or whitespace
+    assert utils.format_comment_preview("") == ""
+    assert utils.format_comment_preview("   \n\n  ") == ""
+
+    # 4. Code block stripping
+    raw3 = "```python\nprint(1)\n```Looks good!"
+    assert utils.format_comment_preview(raw3) == '"Looks good!"'
+
+    # 5. Empty markdown links & URL stripping
+    raw4 = "[](https://app.coderabbit.ai/change-summary/123)"
+    assert utils.format_comment_preview(raw4) == ""
+
+    raw5 = "[CodeRabbit](https://app.coderabbit.ai) Analysis completed"
+    assert utils.format_comment_preview(raw5) == '"CodeRabbit Analysis completed"'
+
+    raw6 = "Check https://github.com/community-outpost/GenHub for details"
+    assert utils.format_comment_preview(raw6) == '"Check for details"'
+
+
+def test_format_log_line_variations():
+    # 1. PR opened by human (truncated link text to PR #389)
+    line1 = utils.format_log_line(
+        "🚀 🆕", "PR Opened", "community-outpost/GenHub", 389,
+        "fix(appupdate): fix subscribed PR and branch update checks",
+        "https://github.com/community-outpost/GenHub/pull/389", "undead2146", item_type="PR"
+    )
+    assert line1 == "🚀 🆕 **PR Opened:** `GenHub` [PR #389](<https://github.com/community-outpost/GenHub/pull/389>) • By 👤 **undead2146**"
+
+    # 2. Comment edited by bot with snippet
+    line2 = utils.format_log_line(
+        "💬 ✏️", "Comment Edited", "community-outpost/GenHub", 382,
+        "fix(launching): only rewrite GeneralsOnline settings for GeneralsOnline profiles",
+        "https://github.com/community-outpost/GenHub/pull/382#issuecomment-123", "deepsource-io[bot]", item_type="PR",
+        extra='"Found 0 issues"'
+    )
+    assert line2 == '💬 ✏️ **Comment Edited:** `GenHub` [PR #382](<https://github.com/community-outpost/GenHub/pull/382#issuecomment-123>) • "Found 0 issues" • By 🤖 **deepsource-io[bot]**'
+
+    # 3. Comment deleted by maintainer where bot was author
+    line3 = utils.format_log_line(
+        "💬 🗑️", "Comment Deleted", "community-outpost/GenHub", 389,
+        "fix(appupdate): update", "https://github.com/community-outpost/GenHub/pull/389#issuecomment-456",
+        "undead2146", item_type="PR", extra='"DeepSource: 0 issues"', target_user="deepsource-io[bot]"
+    )
+    assert line3 == '💬 🗑️ **Comment Deleted:** `GenHub` [PR #389](<https://github.com/community-outpost/GenHub/pull/389#issuecomment-456>) • "DeepSource: 0 issues" • By 👤 **undead2146** (Author: 🤖 **deepsource-io[bot]**)'
+
+    # 4. Review comment deleted with code location and snippet
+    line4 = utils.format_log_line(
+        "📝 🗑️", "Review Comment Deleted", "community-outpost/GenHub", 389,
+        "title", "https://github.com/community-outpost/GenHub/pull/389#discussion_r1",
+        "undead2146", item_type="PR", extra='`GenHub/utils.py:643` • "Refactor this function"',
+        target_user="coderabbitai[bot]"
+    )
+    assert line4 == '📝 🗑️ **Review Comment Deleted:** `GenHub` [PR #389](<https://github.com/community-outpost/GenHub/pull/389#discussion_r1>) • `GenHub/utils.py:643` • "Refactor this function" • By 👤 **undead2146** (Author: 🤖 **coderabbitai[bot]**)'
+
+    # 5. Release (item without number)
+    line5 = utils.format_log_line(
+        "🎉 📦", "Release Published", "community-outpost/GenHub", None,
+        "v1.0.0 (1.0.0)", "https://github.com/community-outpost/GenHub/releases/tag/v1.0.0",
+        "undead2146", item_type="Release"
+    )
+    assert line5 == "🎉 📦 **Release Published:** `GenHub` [Release: v1.0.0 (1.0.0)](<https://github.com/community-outpost/GenHub/releases/tag/v1.0.0>) • By 👤 **undead2146**"
+
+    # 6. Comment with clickable thread link
+    mock_thread = Mock(id=1420182734986543264)
+    line6 = utils.format_log_line(
+        "💬 🆕", "New Comment", "community-outpost/GenHub", 389,
+        "title", "https://github.com/community-outpost/GenHub/pull/389#issuecomment-999",
+        "undead2146", item_type="PR", extra='"Looks good to me!"', thread=mock_thread
+    )
+    assert line6 == '💬 🆕 **New Comment:** `GenHub` [PR #389](<https://github.com/community-outpost/GenHub/pull/389#issuecomment-999>) • <#1420182734986543264> • "Looks good to me!" • By 👤 **undead2146**'
+
+
+@pytest.mark.asyncio
+async def test_find_comment_message_embed_and_content():
+    mock_thread = Mock()
+
+    # Message 1 has embed with author url
+    msg1 = Mock()
+    emb1 = Mock()
+    emb1.author = Mock()
+    emb1.author.url = "https://github.com/owner/repo/pull/1#issuecomment-100"
+    emb1.author.name = "deepsource-io[bot] (Bot Notice)"
+    emb1.description = "Summary"
+    msg1.embeds = [emb1]
+    msg1.content = ""
+    msg1.components = []
+
+    # Message 2 has comment url in text content
+    msg2 = Mock()
+    msg2.embeds = []
+    msg2.content = "Check https://github.com/owner/repo/issues/2#issuecomment-200"
+    msg2.components = []
+
+    async def fake_history(limit=50):
+        for m in [msg1, msg2]:
+            yield m
+
+    mock_thread.history = fake_history
+
+    # Find msg1 by exact url
+    found1 = await utils.find_comment_message(mock_thread, "https://github.com/owner/repo/pull/1#issuecomment-100")
+    assert found1 == msg1
+
+    # Find msg1 by bot author
+    found_bot = await utils.find_comment_message(mock_thread, "https://unknown.url", author_login="deepsource-io[bot]")
+    assert found_bot == msg1
+
+    # Find msg2 by fragment or content URL
+    found2 = await utils.find_comment_message(mock_thread, "https://github.com/owner/repo/issues/2#issuecomment-200")
+    assert found2 == msg2
+
+    # Return None if not found
+    not_found = await utils.find_comment_message(mock_thread, "https://github.com/owner/repo/issues/999#issuecomment-999", author_login="unknown_user")
+    assert not_found is None
+

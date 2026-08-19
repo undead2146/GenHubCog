@@ -640,6 +640,137 @@ def format_message(emoji, action, title, url, author, role_mention, extra="", nu
     return msg
 
 
+def format_comment_preview(body: str, max_len: int = 40) -> str:
+    """Extract a clean, single-line snippet from a comment body with zero URLs or link embeds."""
+    if not body:
+        return ""
+    # 1. Strip HTML comments <!-- ... -->
+    text = re.sub(r"<!--[\s\S]*?-->", "", body)
+    # 2. Strip images (markdown and HTML)
+    text = re.sub(r"!\[.*?\]\(.*?\)", "", text)
+    text = re.sub(r"<img[^>]*>", "", text, flags=re.IGNORECASE)
+    # 3. Strip markdown links with or without text (e.g. [Link](url) -> Link, [](url) -> "")
+    text = re.sub(r"\[([^\]]*)\]\([^)]+\)", r"\1", text)
+    # 4. Strip ANY remaining URLs completely so Discord never creates link preview embeds
+    text = re.sub(r"https?://\S+", "", text, flags=re.IGNORECASE)
+    # 5. Strip code blocks and inline code
+    text = re.sub(r"```[\s\S]*?```", "", text)
+    text = re.sub(r"`[^`\n]+`", "", text)
+    # 6. Strip HTML tags
+    text = re.sub(r"<[^>]+>", "", text)
+    # 7. Strip markdown headers, blockquotes, list markers at start of lines
+    text = re.sub(r"^[#>\-\*\+\d\.\s|]+", "", text, flags=re.MULTILINE)
+    # 8. Strip formatting markers
+    text = re.sub(r"[`\*_~]", "", text)
+    # 9. Collapse whitespace
+    text = " ".join(text.split()).strip()
+    if not text or len(re.sub(r"\W+", "", text)) < 2:
+        return ""
+    if len(text) > max_len:
+        text = text[: max_len - 3].rstrip() + "..."
+    return f'"{text}"'
+
+
+def format_log_line(
+    emoji: str,
+    action: str,
+    repo_full_name: str,
+    number: int | str | None,
+    title: str,
+    url: str,
+    author: str,
+    item_type: str = "PR",
+    extra: str = "",
+    target_user: str = "",
+    thread: object = None,
+) -> str:
+    """Format a clean, ultra-readable single-line Discord log entry with balanced emojis and badges."""
+    repo_short = repo_full_name.split("/")[-1] if repo_full_name else "Repo"
+
+    type_num = f"{item_type} #{number}" if number is not None else item_type
+    if number is not None:
+        target_link = f"[{type_num}](<{url}>)" if url else f"`{type_num}`"
+    elif type_num:
+        clean_title = (title or "").strip()
+        clean_title = re.sub(r"^\[GH\]\s*\[#\d+\]\s*", "", clean_title)
+        clean_title = re.sub(r"^#\d+\s*[-:]?\s*", "", clean_title)
+        if len(clean_title) > 40:
+            clean_title = clean_title[:37].rstrip() + "..."
+        label = f"{type_num}: {clean_title}" if clean_title else type_num
+        target_link = f"[{label}](<{url}>)" if url else f"`{label}`"
+    else:
+        target_link = ""
+
+    thread_id = None
+    if isinstance(thread, int):
+        thread_id = thread
+    elif hasattr(thread, "id") and getattr(thread, "id", None):
+        thread_id = thread.id
+    elif isinstance(thread, str) and thread.isdigit():
+        thread_id = int(thread)
+
+    thread_part = f" • <#{thread_id}>" if thread_id else ""
+
+    actor_emoji = "🤖" if is_bot_author(author) else "👤"
+    actor_str = f"{actor_emoji} **{author}**" if author else ""
+
+    target_part = ""
+    if target_user and target_user != author:
+        tgt_emoji = "🤖" if is_bot_author(target_user) else "👤"
+        target_part = f" (Author: {tgt_emoji} **{target_user}**)"
+
+    extra_str = f" • {extra}" if extra else ""
+    actor_part = f" • By {actor_str}{target_part}" if actor_str else ""
+    return f"{emoji} **{action}:** `{repo_short}` {target_link}{thread_part}{extra_str}{actor_part}"
+
+
+async def find_comment_message(thread, comment_url: str, author_login: str = None):
+    """Find an existing Discord message in a thread that corresponds to a GitHub comment URL or bot author."""
+    if not thread or not hasattr(thread, "history"):
+        return None
+
+    if not comment_url and not author_login:
+        return None
+
+    comment_fragment = ""
+    if comment_url and "#" in comment_url:
+        comment_fragment = comment_url.split("#")[-1].strip()
+
+    async for msg in thread.history(limit=50):
+        # 1. Check embeds
+        for emb in getattr(msg, "embeds", []):
+            if emb.author and emb.author.url:
+                if comment_url and emb.author.url == comment_url:
+                    return msg
+                if comment_fragment and comment_fragment in emb.author.url:
+                    return msg
+            if emb.description and comment_url and comment_url in emb.description:
+                return msg
+            if comment_fragment and emb.description and comment_fragment in emb.description:
+                return msg
+            if author_login and is_bot_author(author_login) and emb.author and getattr(emb.author, "name", None):
+                author_str = str(emb.author.name)
+                author_token = author_str.split(" ")[0].lower().strip()
+                if author_token == author_login.lower().strip():
+                    return msg
+
+        # 2. Check message content
+        if msg.content:
+            if comment_url and comment_url in msg.content:
+                return msg
+            if comment_fragment and comment_fragment in msg.content:
+                return msg
+
+        # 3. Check interactive button components
+        for row in getattr(msg, "components", []):
+            for child in getattr(row, "children", []):
+                btn_url = getattr(child, "url", None)
+                if btn_url and comment_url and btn_url == comment_url:
+                    return msg
+
+    return None
+
+
 async def get_or_create_tag(forum, name):
     """Find or create a tag by name (case-insensitive)."""
     for tag in forum.available_tags:

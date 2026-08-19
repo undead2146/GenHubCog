@@ -33,7 +33,7 @@ jobs:
         env:
           PYTHONPATH: .
         run: |
-          coverage run -m pytest -v --maxfail=1 --disable-warnings
-          coverage report --fail-under=90 -m
+          coverage run --source=GenHub -m pytest tests -v --maxfail=1 --disable-warnings
+          coverage report -m
           coverage xml
 

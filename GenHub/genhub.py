@@ -85,7 +85,16 @@ class GenHub(commands.Cog):
             await self.bot.remove_cog("ConfigCommands")
         except Exception:
             pass
-        # Save thread cache
-        await self.config.thread_cache.set(self.thread_cache)
+        # Save thread cache safely (extract thread IDs if stored as Thread objects)
+        try:
+            serialized_cache = {}
+            for k, v in self.thread_cache.items():
+                str_key = str(k)
+                thread_id = getattr(v, "id", v)
+                if isinstance(thread_id, int):
+                    serialized_cache[str_key] = thread_id
+            await self.config.thread_cache.set(serialized_cache)
+        except Exception:
+            pass
         if hasattr(self, "task"):
             self.task.cancel()

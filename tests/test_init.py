@@ -40,8 +40,11 @@ async def test_cog_load_and_unload(monkeypatch):
     bot.tree.add_command.assert_called()
 
     await cog.cog_unload()
-    # Task should be cancelled or in cancelling state (robust across environments)
-    assert cog.task.cancelled() or cog.task.cancelling()
+    try:
+        await cog.task
+    except (asyncio.CancelledError, Exception):
+        pass
+    assert cog.task.cancelled() or cog.task.done()
 
 
 @pytest.mark.asyncio

@@ -1,7 +1,6 @@
 import sys
 import types
 import pytest
-import GenHub.utils as utils
 from unittest.mock import MagicMock
 
 
@@ -16,6 +15,22 @@ def is_owner():
         return func
     return decorator
 
+def check(predicate):
+    def decorator(func):
+        return func
+    decorator.predicate = predicate
+    return decorator
+
+def guild_only():
+    def decorator(func):
+        return func
+    return decorator
+
+def has_permissions(**perms):
+    def decorator(func):
+        return func
+    return decorator
+
 class _GroupWrapper:
     def __init__(self, func):
         self.func = func
@@ -24,6 +39,10 @@ class _GroupWrapper:
     def command(self, *dargs, **dkwargs):
         def deco(f):
             return f
+        return deco
+    def group(self, *dargs, **dkwargs):
+        def deco(f):
+            return _GroupWrapper(f)
         return deco
 
 def group(*gargs, **gkwargs):
@@ -38,6 +57,9 @@ def command(*cargs, **ckwargs):
 
 commands_mod.Cog = Cog
 commands_mod.is_owner = is_owner
+commands_mod.check = check
+commands_mod.guild_only = guild_only
+commands_mod.has_permissions = has_permissions
 commands_mod.group = group
 commands_mod.command = command
 

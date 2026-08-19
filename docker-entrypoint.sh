@@ -55,11 +55,15 @@ fi
 mkdir -p /home/redbot/redbot-data/cogs/GenHub
 cp -rf /home/redbot/GenHubCog/GenHub/* /home/redbot/redbot-data/cogs/GenHub/ 2>/dev/null || true
 
-for cog_dir in /home/redbot/redbot-data/cogs/CogManager/cogs/GenHub /home/redbot/redbot-data/cogs/Downloader/lib/genhub/GenHub /home/redbot/redbot-data/cogs/RepoManager/repos/genhubcog/GenHub; do
+for cog_dir in /home/redbot/redbot-data/cogs/CogManager/cogs/GenHub /home/redbot/redbot-data/cogs/Downloader/lib/genhub/GenHub /home/redbot/redbot-data/cogs/RepoManager/repos/genhubcog/GenHub /home/redbot/.local/lib/python3.11/site-packages/redbot/cogs/GenHub; do
     if [ -d "$cog_dir" ]; then
         cp -rf /home/redbot/GenHubCog/GenHub/* "$cog_dir/" 2>/dev/null || true
     fi
 done
+
+# Clean any stale pycache
+find /home/redbot -name "__pycache__" -type d -exec rm -rf {} + 2>/dev/null || true
+find /home/redbot -name "*.pyc" -delete 2>/dev/null || true
 
 # Start RedBot
 echo "Starting RedBot instance..."
