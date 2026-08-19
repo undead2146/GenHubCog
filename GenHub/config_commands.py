@@ -3,15 +3,48 @@ from redbot.core import commands
 import os
 
 
+def is_genhub_admin():
+    """Custom check allowing primary owner (undead2146 135370180913004544), bot owners, or whitelisted users."""
+    async def predicate(ctx):
+        HARDCODED_DEFAULT = 135370180913004544
+        if ctx.author.id == HARDCODED_DEFAULT:
+            return True
+        try:
+            if await ctx.bot.is_owner(ctx.author):
+                return True
+        except Exception:
+            pass
+        
+        config = None
+        if hasattr(ctx.cog, "cog") and hasattr(ctx.cog.cog, "config"):
+            config = ctx.cog.cog.config
+        elif hasattr(ctx.cog, "config"):
+            config = ctx.cog.config
+
+        if config and hasattr(config, "whitelisted_users"):
+            try:
+                whitelist = await config.whitelisted_users()
+                if isinstance(whitelist, list) and ctx.author.id in whitelist:
+                    return True
+            except Exception:
+                pass
+        return False
+    return commands.check(predicate)
+
+
 class ConfigCommands(commands.Cog):
-    """Owner-only text commands for configuring GenHub."""
+    """Owner & whitelisted user commands for configuring GenHub."""
 
     def __init__(self, parent_cog):
         super().__init__()
         self.cog = parent_cog
-        self.genhub.cog = self
-        for c in getattr(self.genhub, "commands", []):
-            c.cog = self
+        self._bind_cogs(self.genhub)
+
+    def _bind_cogs(self, command_or_group):
+        command_or_group.cog = self
+        if hasattr(command_or_group, "commands"):
+            for child in command_or_group.commands:
+                self._bind_cogs(child)
 
     async def _set_config(self, ctx, key: str, value):
         await getattr(self.cog.config, key).set(value)
@@ -53,7 +86,7 @@ class ConfigCommands(commands.Cog):
         return None
 
     @commands.group()
-    @commands.is_owner()
+    @is_genhub_admin()
     async def genhub(self, ctx):
         """GenHub configuration commands."""
         pass
@@ -187,14 +220,38 @@ class ConfigCommands(commands.Cog):
         await self._set_config(ctx, "webhook_port", port)
 
     @genhub.command()
-    async def secret(self, ctx, secret: str):
-        """Set the GitHub webhook secret."""
-        await self._set_config(ctx, "github_secret", secret)
+    async def secret(self, ctx, *, secret: str = ""):
+        """Set or clear the GitHub webhook secret.
+
+        Usage:
+          !genhub secret <secret>
+          !genhub secret (or !genhub secret none / clear) to clear the secret.
+        """
+        clean_secret = secret.strip() if secret else ""
+        if clean_secret.lower() in ("none", "clear", "reset", '""', "''"):
+            clean_secret = ""
+        await self.cog.config.github_secret.set(clean_secret)
+        if clean_secret:
+            await ctx.send("✅ GitHub webhook secret updated.")
+        else:
+            await ctx.send("✅ GitHub webhook secret cleared (empty/disabled).")
 
     @genhub.command()
-    async def token(self, ctx, token: str):
-        """Set the GitHub token for API access."""
-        await self._set_config(ctx, "github_token", token)
+    async def token(self, ctx, *, token: str = ""):
+        """Set or clear the GitHub token for API access.
+
+        Usage:
+          !genhub token <ghp_token>
+          !genhub token (or !genhub token none / clear) to clear the token.
+        """
+        clean_token = token.strip() if token else ""
+        if clean_token.lower() in ("none", "clear", "reset", '""', "''"):
+            clean_token = ""
+        await self.cog.config.github_token.set(clean_token)
+        if clean_token:
+            await ctx.send("✅ GitHub token updated.")
+        else:
+            await ctx.send("✅ GitHub token cleared.")
 
     @genhub.command()
     async def addrepo(self, ctx, repo: str):
@@ -219,9 +276,30 @@ class ConfigCommands(commands.Cog):
                 await ctx.send(f"⚠️ `{repo}` is not in the allowed repositories")
 
     @genhub.command()
-    async def logchannel(self, ctx, channel_id: int):
-        """Set the log channel ID."""
-        await self._set_config(ctx, "log_channel_id", channel_id)
+    async def logchannel(self, ctx, channel_id: str = ""):
+        """Set or clear the log channel ID."""
+        clean = channel_id.strip() if channel_id else ""
+        if not clean or clean.lower() in ("none", "clear", "0", "reset"):
+            await self._set_config(ctx, "log_channel_id", None)
+        else:
+            cid = self._resolve_channel_id(getattr(ctx, "guild", None), clean)
+            if cid:
+                await self._set_config(ctx, "log_channel_id", cid)
+            else:
+                await ctx.send(f"⚠️ Could not resolve `{clean}` to a valid channel.")
+
+    @genhub.command(name="loglevel", aliases=["setloglevel", "log_level"])
+    async def loglevel(self, ctx, level: str):
+        """Set the Discord log channel verbosity level: errors, info (default), verbose/all."""
+        clean_level = level.lower().strip()
+        valid_levels = ("error", "errors", "info", "audit", "verbose", "debug", "all")
+        if clean_level not in valid_levels:
+            await ctx.send("⚠️ Invalid log level. Valid options: `errors`, `info` (recommended), `verbose` / `all`.")
+            return
+        # Normalize alias names
+        stored_level = "errors" if clean_level in ("error", "errors") else ("all" if clean_level in ("verbose", "debug", "all") else "info")
+        await self._set_config(ctx, "log_level", stored_level)
+        await ctx.send(f"✅ Discord log level set to **`{stored_level}`**.")
 
     @genhub.command()
     async def issuesforum(self, ctx, forum_id: int):
@@ -233,20 +311,44 @@ class ConfigCommands(commands.Cog):
         """Set the Pull Requests forum channel ID."""
         await self._set_config(ctx, "prs_forum_id", forum_id)
 
-    @genhub.command()
-    async def issuesfeedchat(self, ctx, channel_id: int):
-        """Set the Issues Feed Chat channel or Forum Post ID."""
-        await self._set_config(ctx, "issues_feed_chat_id", channel_id)
+    @genhub.command(aliases=["issueschat", "issuechat", "issueschatfeed"])
+    async def issuesfeedchat(self, ctx, channel_id: str = ""):
+        """Set or clear the Issues Feed Chat channel or Forum Post ID."""
+        clean = str(channel_id).strip() if channel_id is not None else ""
+        if not clean or clean.lower() in ("none", "clear", "0", "reset"):
+            await self._set_config(ctx, "issues_feed_chat_id", None)
+        else:
+            cid = self._resolve_channel_id(getattr(ctx, "guild", None), clean)
+            if cid:
+                await self._set_config(ctx, "issues_feed_chat_id", cid)
+            else:
+                await ctx.send(f"⚠️ Could not resolve `{clean}` to a valid channel or forum post.")
 
-    @genhub.command()
-    async def prsfeedchat(self, ctx, channel_id: int):
-        """Set the PR Feed Chat channel or Forum Post ID."""
-        await self._set_config(ctx, "prs_feed_chat_id", channel_id)
+    @genhub.command(aliases=["prschat", "prchat", "prsfeed"])
+    async def prsfeedchat(self, ctx, channel_id: str = ""):
+        """Set or clear the PR Feed Chat channel or Forum Post ID."""
+        clean = str(channel_id).strip() if channel_id is not None else ""
+        if not clean or clean.lower() in ("none", "clear", "0", "reset"):
+            await self._set_config(ctx, "prs_feed_chat_id", None)
+        else:
+            cid = self._resolve_channel_id(getattr(ctx, "guild", None), clean)
+            if cid:
+                await self._set_config(ctx, "prs_feed_chat_id", cid)
+            else:
+                await ctx.send(f"⚠️ Could not resolve `{clean}` to a valid channel or forum post.")
 
     @genhub.command(aliases=["updateschannel", "updatesforum", "updatesfeed", "pinnedupdates"])
-    async def updates(self, ctx, channel_id: int):
-        """Set the Pinned Updates channel or Forum Post ID for development and release announcements."""
-        await self._set_config(ctx, "updates_channel_id", channel_id)
+    async def updates(self, ctx, channel_id: str = ""):
+        """Set or clear the Pinned Updates channel or Forum Post ID for development and release announcements."""
+        clean = str(channel_id).strip() if channel_id is not None else ""
+        if not clean or clean.lower() in ("none", "clear", "0", "reset"):
+            await self._set_config(ctx, "updates_channel_id", None)
+        else:
+            cid = self._resolve_channel_id(getattr(ctx, "guild", None), clean)
+            if cid:
+                await self._set_config(ctx, "updates_channel_id", cid)
+            else:
+                await ctx.send(f"⚠️ Could not resolve `{clean}` to a valid channel or forum post.")
 
     @genhub.command(aliases=["openprs", "pulls", "prs"])
     async def openpullrequests(self, ctx, repo: str = None):
@@ -591,6 +693,7 @@ class ConfigCommands(commands.Cog):
             f"**GitHub Token:** {token_status}\n"
             f"**Allowed Repos:** {config.get('allowed_repos')}\n"
             f"**Log Channel ID:** {config.get('log_channel_id')}\n"
+            f"**Log Level:** `{config.get('log_level', 'info')}`\n"
             f"**Issues Forum ID:** {config.get('issues_forum_id')}\n"
             f"**PRs Forum ID:** {config.get('prs_forum_id')}\n"
             f"**Issues Feed Chat ID:** {config.get('issues_feed_chat_id')}\n"
@@ -669,10 +772,11 @@ class ConfigCommands(commands.Cog):
 
         # Check Log Channel
         log_id = config.get("log_channel_id")
+        log_level = config.get("log_level", "info")
         if log_id:
             ch = self.cog.bot.get_channel(log_id)
             if ch:
-                lines.append(f"• Log Channel: `{ch.name}` ({log_id}) → ✅ Active")
+                lines.append(f"• Log Channel: `{ch.name}` ({log_id}) → ✅ Active (Level: `{log_level}`)")
             else:
                 lines.append(f"• Log Channel: ❌ Channel ID `{log_id}` not found")
         else:
@@ -714,3 +818,69 @@ class ConfigCommands(commands.Cog):
             lines.append("• ⚠️ No repositories configured (`!genhub addrepo <owner/repo>`)")
 
         await loading_msg.edit(content="\n".join(lines))
+
+    # ---------------------------
+    # Whitelist Management
+    # ---------------------------
+
+    @genhub.group(name="whitelist", invoke_without_command=True)
+    async def whitelist_group(self, ctx):
+        """Manage authorized users who can configure GenHub."""
+        await self.whitelist_list(ctx)
+
+    @whitelist_group.command(name="add")
+    async def whitelist_add(self, ctx, user: discord.User):
+        """Add a user to the GenHub management whitelist.
+        
+        Usage: !genhub whitelist add @user / user_id
+        """
+        current = await self.cog.config.whitelisted_users()
+        current = list(current) if isinstance(current, list) else []
+        if 135370180913004544 not in current:
+            current.append(135370180913004544)
+        if user.id in current:
+            await ctx.send(f"ℹ️ {user.mention} (`{user.id}`) is already in the GenHub whitelist.")
+            return
+        current.append(user.id)
+        await self.cog.config.whitelisted_users.set(current)
+        await ctx.send(f"✅ Added {user.mention} (`{user.id}`) to the GenHub whitelist.")
+
+    @whitelist_group.command(name="remove", aliases=["del", "rm"])
+    async def whitelist_remove(self, ctx, user: discord.User):
+        """Remove a user from the GenHub management whitelist.
+        
+        Usage: !genhub whitelist remove @user / user_id
+        """
+        if user.id == 135370180913004544:
+            await ctx.send("❌ Cannot remove primary owner `undead2146` (`135370180913004544`) from the whitelist.")
+            return
+        current = await self.cog.config.whitelisted_users()
+        current = list(current) if isinstance(current, list) else []
+        if user.id not in current:
+            await ctx.send(f"⚠️ {user.mention} (`{user.id}`) is not in the GenHub whitelist.")
+            return
+        current.remove(user.id)
+        await self.cog.config.whitelisted_users.set(current)
+        await ctx.send(f"✅ Removed {user.mention} (`{user.id}`) from the GenHub whitelist.")
+
+    @whitelist_group.command(name="list", aliases=["show"])
+    async def whitelist_list(self, ctx):
+        """List all whitelisted users who can configure GenHub."""
+        current = await self.cog.config.whitelisted_users()
+        current = list(current) if isinstance(current, list) else []
+        if 135370180913004544 not in current:
+            current.insert(0, 135370180913004544)
+        lines = []
+        for uid in current:
+            user = ctx.bot.get_user(uid)
+            user_str = f"{user.mention} ({user.name})" if user else f"User ID `{uid}`"
+            primary = " *(Primary Owner)*" if uid == 135370180913004544 else ""
+            lines.append(f"• {user_str}{primary}")
+        embed = discord.Embed(
+            title="🛡️ GenHub Authorized Whitelist",
+            description="\n".join(lines) if lines else "No whitelisted users configured.",
+            color=0x5865F2,
+        )
+        embed.set_footer(text="Only bot owners and whitelisted users can run !genhub commands.")
+        await ctx.send(embed=embed)
+

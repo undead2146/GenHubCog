@@ -876,7 +876,6 @@
       <li><a href="#comment-formatting" class="nav-link"><span>💬</span> Comments & Mentions</a></li>
       <li><a href="#commands" class="nav-link"><span>⌨️</span> Command Reference</a></li>
       <li><a href="#discord-layout" class="nav-link"><span>💬</span> GeneralsHub Layout</a></li>
-      <li><a href="#ecosystem-links" class="nav-link"><span>🌐</span> Official Repositories</a></li>
       <li><a href="#github-webhook" class="nav-link"><span>🐙</span> Webhook Settings</a></li>
     </ul>
 
@@ -1209,24 +1208,45 @@
     <!-- Comment Formatting & Mentions -->
     <section id="comment-formatting">
       <div class="section-header">
-        <h3>Comment Formatting & Mentions</h3>
+        <h3>💬 Bot Reviews, Markdown Cleaning & Logging</h3>
       </div>
       <p class="section-desc">
-        Rules for notifications, role mentions, and GitHub comment formatting in Discord threads:
+        Rules for notifications, role mentions, bot review conversions, and configurable logging:
       </p>
 
       <div class="grid-2">
         <div class="card">
           <div class="card-title">Role Mention Rules</div>
           <p>
-            Role mentions (<code>@Contributor</code>) are only sent when a PR is opened or merged. All issue creations, issue comments, reviews, and closed unmerged PRs post without role mentions.
+            Role mentions (<code>@Contributor</code>) are strictly sent only when a PR is opened or merged. Issue creations, issue comments, reviews, and unmerged closed PRs post cleanly without role mentions.
           </p>
         </div>
 
         <div class="card">
-          <div class="card-title">Markdown Cleaning & Embed Formatting</div>
+          <div class="card-title">Ultra-Compact Bot Summaries & Action Buttons</div>
           <p>
-            GitHub comments are parsed into Discord embeds, removing raw HTML tags (<code>&lt;details&gt;</code>, <code>&lt;summary&gt;</code>, <code>&lt;!-- --&gt;</code>). Automated bot reviews post the primary summary embed, aggregating any additional line notes into the embed footer.
+            Automated bot reviews (CodeRabbit, Qodo, DeepSource, Kilo Code) are condensed into ultra-compact, high-signal summary badges (max ~280 chars) with muted dark styling (<code>0x2B2D31</code>) and an interactive 1-click <strong>Link Button (<code>🔍 View Full Review on GitHub</code>)</strong>. Full-length human reviews remain prominent (<code>0x5865F2</code>) without being drowned out by bot noise.
+          </p>
+        </div>
+
+        <div class="card">
+          <div class="card-title">Multi-Level Discord Logging</div>
+          <p>
+            Switch logging verbosity on the fly with <code>!genhub loglevel &lt;errors|info|all&gt;</code>. <strong><code>info</code></strong> (default) logs all webhook receipts, PR/issue state changes, review submissions, releases, and reconcile runs.
+          </p>
+        </div>
+
+        <div class="card">
+          <div class="card-title">Flexible Secret & Token Management</div>
+          <p>
+            Easily set or clear secrets and tokens without syntax errors. Run <code>!genhub secret</code>, <code>!genhub secret none</code>, or <code>!genhub secret clear</code> to disable webhook signature validation anytime.
+          </p>
+        </div>
+
+        <div class="card">
+          <div class="card-title">🛡️ Whitelist & Access Control</div>
+          <p>
+            Restricts <code>!genhub</code> commands so only bot owners and whitelisted administrators can execute them. Primary owner <code>undead2146</code> (<code>135370180913004544</code>) is permanently protected in the whitelist. Additional users can be added with <code>!genhub whitelist add @user</code>.
           </p>
         </div>
       </div>
@@ -1259,9 +1279,45 @@
             <tbody>
               <tr>
                 <td><code class="cmd">!genhub setup</code></td>
-                <td><code>[#issues] [#prs] [#log] [@role] [repo]</code></td>
-                <td>All-in-one setup command with automatic chat channel discovery</td>
+                <td><code>[&lt;#issues&gt; &lt;#prs&gt; &lt;#log&gt; &lt;@role&gt; &lt;repo&gt; &lt;#updates&gt;]</code></td>
+                <td>All-in-one setup wizard to configure forums, logs, roles, and repo in 1 command or interactive prompts</td>
                 <td><button class="copy-btn" data-copy="!genhub setup">📋 Copy</button></td>
+              </tr>
+              <tr>
+                <td><code class="cmd">!genhub whitelist add</code></td>
+                <td><code>&lt;@user | id&gt;</code></td>
+                <td>Grants an administrator permission to run !genhub configuration commands</td>
+                <td><button class="copy-btn" data-copy="!genhub whitelist add ">📋 Copy</button></td>
+              </tr>
+              <tr>
+                <td><code class="cmd">!genhub whitelist remove</code></td>
+                <td><code>&lt;@user | id&gt;</code></td>
+                <td>Revokes an administrator's permission to run !genhub commands</td>
+                <td><button class="copy-btn" data-copy="!genhub whitelist remove ">📋 Copy</button></td>
+              </tr>
+              <tr>
+                <td><code class="cmd">!genhub whitelist list</code></td>
+                <td>None</td>
+                <td>Lists all authorized users on the GenHub whitelist with mentions and IDs</td>
+                <td><button class="copy-btn" data-copy="!genhub whitelist list">📋 Copy</button></td>
+              </tr>
+              <tr>
+                <td><code class="cmd">!genhub loglevel</code></td>
+                <td><code>&lt;errors | info | all&gt;</code></td>
+                <td>Sets Discord log channel verbosity (errors, info [default], or all/verbose)</td>
+                <td><button class="copy-btn" data-copy="!genhub loglevel info">📋 Copy</button></td>
+              </tr>
+              <tr>
+                <td><code class="cmd">!genhub secret</code></td>
+                <td><code>[&lt;secret&gt; | none | clear]</code></td>
+                <td>Sets or clears the GitHub webhook secret (leave empty or pass 'none' to clear)</td>
+                <td><button class="copy-btn" data-copy="!genhub secret clear">📋 Copy</button></td>
+              </tr>
+              <tr>
+                <td><code class="cmd">!genhub token</code></td>
+                <td><code>[&lt;token&gt; | none | clear]</code></td>
+                <td>Configures or clears the GitHub API Personal Access Token</td>
+                <td><button class="copy-btn" data-copy="!genhub token clear">📋 Copy</button></td>
               </tr>
               <tr>
                 <td><code class="cmd">!genhub openprs</code></td>
@@ -1290,7 +1346,7 @@
               <tr>
                 <td><code class="cmd">!genhub showconfig</code></td>
                 <td>None</td>
-                <td>Displays active webhook ports, forum IDs, tracked repos, and token status</td>
+                <td>Displays active webhook ports, forum IDs, log levels, tracked repos, and token status</td>
                 <td><button class="copy-btn" data-copy="!genhub showconfig">📋 Copy</button></td>
               </tr>
               <tr>
@@ -1306,69 +1362,45 @@
                 <td><button class="copy-btn" data-copy="!genhub cancelreconcile">📋 Copy</button></td>
               </tr>
               <tr>
+                <td><code class="cmd">!genhub issueschat</code></td>
+                <td><code>[&lt;#mention | id | none&gt;]</code></td>
+                <td>Sets or clears the Issues Feed Chat channel or forum post (auto-discovered if empty)</td>
+                <td><button class="copy-btn" data-copy="!genhub issueschat ">📋 Copy</button></td>
+              </tr>
+              <tr>
+                <td><code class="cmd">!genhub prschat</code></td>
+                <td><code>[&lt;#mention | id | none&gt;]</code></td>
+                <td>Sets or clears the PR Feed Chat channel or forum post (auto-discovered if empty)</td>
+                <td><button class="copy-btn" data-copy="!genhub prschat ">📋 Copy</button></td>
+              </tr>
+              <tr>
                 <td><code class="cmd">!genhub updates</code></td>
-                <td><code>&lt;channel_id&gt;</code></td>
-                <td>Sets the Pinned Updates / Announcements feed for branch merges and releases</td>
-                <td><button class="copy-btn" data-copy="!genhub updates">📋 Copy</button></td>
-              </tr>
-              <tr>
-                <td><code class="cmd">!genhub testrepo</code></td>
-                <td><code>&lt;owner/repo&gt;</code></td>
-                <td>Tests API reachability and permissions for a specific repository</td>
-                <td><button class="copy-btn" data-copy="!genhub testrepo community-outpost/GenHub">📋 Copy</button></td>
-              </tr>
-              <tr>
-                <td><code class="cmd">!genhub addrepo</code></td>
-                <td><code>&lt;owner/repo&gt;</code></td>
-                <td>Adds a repository to the tracked allowlist</td>
-                <td><button class="copy-btn" data-copy="!genhub addrepo community-outpost/GenHub">📋 Copy</button></td>
-              </tr>
-              <tr>
-                <td><code class="cmd">!genhub removerepo</code></td>
-                <td><code>&lt;owner/repo&gt;</code></td>
-                <td>Removes a repository from the tracked allowlist</td>
-                <td><button class="copy-btn" data-copy="!genhub removerepo community-outpost/GenHub">📋 Copy</button></td>
-              </tr>
-              <tr>
-                <td><code class="cmd">!genhub issuesforum</code></td>
-                <td><code>&lt;forum_id&gt;</code></td>
-                <td>Sets the Forum channel ID for GitHub Issues (auto-links chat)</td>
-                <td><button class="copy-btn" data-copy="!genhub issuesforum ">📋 Copy</button></td>
-              </tr>
-              <tr>
-                <td><code class="cmd">!genhub prsforum</code></td>
-                <td><code>&lt;forum_id&gt;</code></td>
-                <td>Sets the Forum channel ID for Pull Requests (auto-links chat)</td>
-                <td><button class="copy-btn" data-copy="!genhub prsforum ">📋 Copy</button></td>
+                <td><code>[&lt;#mention | id | none&gt;]</code></td>
+                <td>Sets the Pinned Updates feed for branch merges, issue resolutions, and releases</td>
+                <td><button class="copy-btn" data-copy="!genhub updates ">📋 Copy</button></td>
               </tr>
               <tr>
                 <td><code class="cmd">!genhub logchannel</code></td>
-                <td><code>&lt;channel_id&gt;</code></td>
-                <td>Sets the error and alert logging channel</td>
+                <td><code>[&lt;#mention | id | none&gt;]</code></td>
+                <td>Sets or clears the error and operational event logging channel</td>
                 <td><button class="copy-btn" data-copy="!genhub logchannel ">📋 Copy</button></td>
               </tr>
               <tr>
                 <td><code class="cmd">!genhub contributorrole</code></td>
-                <td><code>&lt;role_id&gt;</code></td>
-                <td>Sets the role ID to tag on new PR opens and merges</td>
+                <td><code>[&lt;@role | id | none&gt;]</code></td>
+                <td>Sets the role to tag in PR/issue chat on open and close/merge</td>
                 <td><button class="copy-btn" data-copy="!genhub contributorrole ">📋 Copy</button></td>
-              </tr>
-              <tr>
-                <td><code class="cmd">!genhub token</code></td>
-                <td><code>&lt;token&gt;</code></td>
-                <td>Configures the GitHub API Personal Access Token</td>
-                <td><button class="copy-btn" data-copy="!genhub token ">📋 Copy</button></td>
               </tr>
               <tr>
                 <td><code class="cmd">!genhub clearcache</code></td>
                 <td>None</td>
-                <td>Clears in-memory thread cache to force fresh lookups</td>
+                <td>Clears in-memory thread cache to force fresh lookups via Discord REST API</td>
                 <td><button class="copy-btn" data-copy="!genhub clearcache">📋 Copy</button></td>
               </tr>
               <tr>
                 <td><code class="cmd">/genhubsetup</code></td>
                 <td>Channel pickers</td>
-                <td>Interactive visual setup wizard with channel dropdown menus</td>
+                <td>Interactive visual setup wizard with channel dropdown menus & log level selection</td>
                 <td><button class="copy-btn" data-copy="/genhubsetup">📋 Copy</button></td>
               </tr>
               <tr>
@@ -1422,7 +1454,7 @@
                 </div>
                 <div style="font-size:13.5px; color:#dbdee1;">
                   🆕 <strong>PR created:</strong> <a href="#" style="color:#00b0f4; text-decoration:none;">Launcher Patch v1.0.5</a><br>
-                  👤 By: <strong>undead2146</strong> <span style="background:rgba(88,101,242,0.3); color:#c9cdfb; padding:1px 4px; border-radius:3px; font-size:12px;">@Contributor</span>
+                  👤 By: <strong>undead2146</strong>
                 </div>
                 <div class="msg-embed">
                   <div class="embed-title">
@@ -1448,7 +1480,7 @@
                 </div>
                 <div style="font-size:13.5px; color:#dbdee1;">
                   ✅ <strong>PR merged:</strong> <a href="#" style="color:#00b0f4; text-decoration:none;">Launcher Patch v1.0.5</a><br>
-                  👤 By: <strong>undead2146</strong> <span style="background:rgba(88,101,242,0.3); color:#c9cdfb; padding:1px 4px; border-radius:3px; font-size:12px;">@Contributor</span>
+                  👤 By: <strong>undead2146</strong>
                 </div>
                 <div class="msg-embed" style="border-left-color: #9b59b6;">
                   <div class="embed-title">
@@ -1465,44 +1497,6 @@
       </div>
     </section>
 
-    <!-- Official Repositories & Ecosystem Links -->
-    <section id="ecosystem-links">
-      <div class="section-header">
-        <h3>🌐 Official Repositories & Ecosystem Links</h3>
-      </div>
-      <p class="section-desc">
-        Core projects and official repositories powering the GeneralsHub ecosystem:
-      </p>
-
-      <div class="grid-3">
-        <div class="card">
-          <div class="card-title">Community Outpost</div>
-          <p style="font-size:13px; color:#dbdee1; line-height:1.7;">
-            • <a href="https://github.com/community-outpost/GenHub" target="_blank" style="color:#5865f2; font-weight:600;">GenHub Repository</a><br>
-            • <a href="https://generalshub.netlify.app/wiki/" target="_blank" style="color:#5865f2;">GeneralsHub Wiki</a><br>
-            • <a href="https://gomatch.community-outpost.com/" target="_blank" style="color:#5865f2;">GO//match Match History</a>
-          </p>
-        </div>
-
-        <div class="card">
-          <div class="card-title">The Super Hackers (TSH)</div>
-          <p style="font-size:13px; color:#dbdee1; line-height:1.7;">
-            • <a href="https://github.com/TheSuperHackers/GeneralsGameCode" target="_blank" style="color:#23a55a; font-weight:600;">GeneralsGameCode</a> (C++ Engine)<br>
-            • <a href="https://github.com/TheSuperHackers/GeneralsGamePatch" target="_blank" style="color:#23a55a;">GeneralsGamePatch</a> (Community Patch)
-          </p>
-        </div>
-
-        <div class="card">
-          <div class="card-title">GeneralsOnline (GO)</div>
-          <p style="font-size:13px; color:#dbdee1; line-height:1.7;">
-            • <a href="https://github.com/GeneralsOnlineDevelopmentTeam/GameClient" target="_blank" style="color:#eb459e; font-weight:600;">GameClient</a> (Client Code)<br>
-            • <a href="https://github.com/GeneralsOnlineDevelopmentTeam/Services" target="_blank" style="color:#eb459e;">Services</a> (Backend APIs)<br>
-            • <a href="https://www.playgenerals.online/" target="_blank" style="color:#eb459e;">GeneralsOnline Portal</a>
-          </p>
-        </div>
-      </div>
-    </section>
-
     <!-- GitHub Webhook Settings -->
     <section id="github-webhook">
       <div class="section-header">
@@ -1511,9 +1505,10 @@
       <div class="card">
         <div class="card-title"><span>⚙️</span> In your GitHub Repository Settings (Settings &gt; Webhooks &gt; Add webhook):</div>
         <ul style="color:var(--text-muted); font-size:13.5px; margin: 12px 20px; line-height: 1.8;">
-          <li><strong>Payload URL:</strong> <code>http://&lt;YOUR_SERVER_IP&gt;:8080/github</code> (or <code>/webhook</code>)</li>
+          <li><strong>Payload URL:</strong> <code>https://breath-contracting-saints-spirituality.trycloudflare.com/github</code></li>
           <li><strong>Content type:</strong> <code>application/json</code></li>
-          <li><strong>Secret:</strong> <em>(Optional, set via <code>!genhub secret &lt;secret&gt;</code> if configured)</em></li>
+          <li><strong>Secret:</strong> <em>(Leave empty by default, or match <code>!genhub secret &lt;secret&gt;</code>)</em></li>
+          <li><strong>SSL verification:</strong> 🔘 <strong>Enable SSL verification</strong></li>
           <li><strong>Events to select:</strong>
             <ul style="margin-left: 20px;">
               <li>☑️ <strong>Issues</strong></li>
@@ -1521,8 +1516,10 @@
               <li>☑️ <strong>Issue comments</strong></li>
               <li>☑️ <strong>Pull request reviews</strong></li>
               <li>☑️ <strong>Pull request review comments</strong></li>
+              <li>☑️ <strong>Releases</strong></li>
             </ul>
           </li>
+          <li><strong>Active:</strong> ☑️ <strong>Active</strong> (checked)</li>
         </ul>
       </div>
     </section>

@@ -125,7 +125,7 @@ async def test_other_setters_and_showconfig():
             super().__init__()
             for key in [
                 "webhook_host", "webhook_port", "github_secret",
-                "log_channel_id", "issues_forum_id", "prs_forum_id",
+                "log_channel_id", "log_level", "issues_forum_id", "prs_forum_id",
                 "issues_feed_chat_id", "prs_feed_chat_id", "updates_channel_id",
                 "contributor_role_id", "github_token"
             ]:
@@ -137,13 +137,23 @@ async def test_other_setters_and_showconfig():
 
     cog = FullDummyCog()
     cmd = ConfigCommands(cog)
-    ctx = type("Ctx", (), {"send": AsyncMock()})()
+    ctx = type("Ctx", (), {"send": AsyncMock(), "guild": None})()
 
     # exercise all simple setters
     await cmd.host(ctx, "1.2.3.4")
     await cmd.port(ctx, 1234)
-    await cmd.secret(ctx, "sec")
-    await cmd.logchannel(ctx, 111)
+    await cmd.secret(ctx, secret="sec")
+    cog.config.github_secret.set.assert_awaited_with("sec")
+    await cmd.secret(ctx, secret="")
+    cog.config.github_secret.set.assert_awaited_with("")
+    await cmd.secret(ctx, secret="none")
+    cog.config.github_secret.set.assert_awaited_with("")
+    await cmd.token(ctx, token="ghp_123")
+    cog.config.github_token.set.assert_awaited_with("ghp_123")
+    await cmd.token(ctx, token="clear")
+    cog.config.github_token.set.assert_awaited_with("")
+    await cmd.logchannel(ctx, channel_id="111")
+    await cmd.logchannel(ctx, channel_id="none")
     await cmd.issuesforum(ctx, 222)
     await cmd.prsforum(ctx, 333)
     await cmd.issuesfeedchat(ctx, 444)
@@ -171,6 +181,16 @@ async def test_other_setters_and_showconfig():
     await cmd.showconfig(ctx)
     ctx.send.assert_awaited()
 
+    # loglevel
+    await cmd.loglevel(ctx, "invalid_level")
+    ctx.send.assert_awaited()
+    await cmd.loglevel(ctx, "errors")
+    cog.config.log_level.set.assert_awaited_with("errors")
+    await cmd.loglevel(ctx, "info")
+    cog.config.log_level.set.assert_awaited_with("info")
+    await cmd.loglevel(ctx, "verbose")
+    cog.config.log_level.set.assert_awaited_with("all")
+
     # cancelreconcile when not running
     cog.handlers.is_reconciling = False
     await cmd.cancelreconcile(ctx)
@@ -179,4 +199,55 @@ async def test_other_setters_and_showconfig():
     cog.handlers.is_reconciling = True
     await cmd.cancelreconcile(ctx)
     assert cog.handlers.reconcile_cancelled is True
+
+
+@pytest.mark.asyncio
+async def test_whitelist_commands_and_check():
+    from GenHub.config_commands import is_genhub_admin
+
+    cog = DummyCog()
+    whitelisted_list = [135370180913004544]
+    cog.config.whitelisted_users = AsyncMock(return_value=whitelisted_list)
+    cog.config.whitelisted_users.set = AsyncMock()
+
+    cmd = ConfigCommands(cog)
+
+    # 1. Test is_genhub_admin check predicate
+    check_predicate = is_genhub_admin().predicate
+
+    ctx_owner = Mock()
+    ctx_owner.author.id = 135370180913004544
+    ctx_owner.cog = cmd
+    assert await check_predicate(ctx_owner) is True
+
+    ctx_other = Mock()
+    ctx_other.author.id = 99999999
+    ctx_other.cog = cmd
+    ctx_other.bot.is_owner = AsyncMock(return_value=False)
+    assert await check_predicate(ctx_other) is False
+
+    # 2. Test whitelist add
+    ctx_send = Mock()
+    ctx_send.send = AsyncMock()
+    user_to_add = Mock()
+    user_to_add.id = 55555
+    user_to_add.mention = "<@55555>"
+
+    await cmd.whitelist_add(ctx_send, user_to_add)
+    cog.config.whitelisted_users.set.assert_awaited()
+    assert 55555 in cog.config.whitelisted_users.set.call_args[0][0]
+
+    # 3. Test whitelist remove primary owner forbidden
+    primary_user = Mock()
+    primary_user.id = 135370180913004544
+    await cmd.whitelist_remove(ctx_send, primary_user)
+    assert "Cannot remove primary owner" in ctx_send.send.call_args[0][0]
+
+    # 4. Test whitelist list
+    ctx_list = Mock()
+    ctx_list.send = AsyncMock()
+    ctx_list.bot.get_user = Mock(return_value=None)
+    await cmd.whitelist_list(ctx_list)
+    ctx_list.send.assert_awaited()
+
 

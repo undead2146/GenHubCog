@@ -51,6 +51,84 @@ def test_clean_github_markdown():
     assert "[#256](https://github.com/community-outpost/GenHub/issues/256)" in clean_sample
 
 
+def test_clean_github_markdown_deepsource():
+    from GenHub.utils import clean_github_markdown
+    raw = """
+    <h2><picture><source srcset="...grade_a.svg"/><img src="...grade_a.svg"/></picture><span>DeepSource Code Review</span></h2>
+    > [!IMPORTANT]
+    > Some issues found as part of this review are outside of the diff.
+    <h3>PR Report Card</h3>
+    <table>
+    <tr>
+    <td><strong>Overall Grade</strong>&nbsp;&nbsp;<a href="https://deepsource.com/run/123"><picture><img src="...grade_a.svg"/></picture></a><br/><br/><strong>Focus Area:</strong> Hygiene</td>
+    <td><strong>Security</strong>&nbsp;&nbsp;<img src="...grade_a.svg"/></td>
+    </tr>
+    </table>
+    <h3>Code Review Summary</h3>
+    <table>
+    <tr><th>Analyzer</th><th>Status</th><th>Details</th></tr>
+    <tr><td><strong>C#</strong></td><td><img src="...status_failed.svg"/></td><td><a href="https://deepsource.com/cs">Review</a> ↗</td></tr>
+    <tr><td><strong>JavaScript</strong></td><td><img src="...status_passed.svg"/></td><td><a href="https://deepsource.com/js">Review</a> ↗</td></tr>
+    </table>
+    """
+    cleaned = clean_github_markdown(raw, repo="community-outpost/GenHub")
+    assert "### [A] DeepSource Code Review" in cleaned or "[A]" in cleaned
+    assert "> 🟣 **Important:**" in cleaned
+    assert "• **Overall Grade**: [A](https://deepsource.com/run/123)" in cleaned or "[A](https://deepsource.com/run/123)" in cleaned
+    assert "• **Security**: [A]" in cleaned
+    assert "❌ FAILED" in cleaned
+    assert "✅ PASSED" in cleaned
+    assert "• **C#** — ❌ FAILED — [Review](https://deepsource.com/cs) ↗" in cleaned
+
+
+def test_clean_github_markdown_qodo():
+    from GenHub.utils import clean_github_markdown
+    raw = """
+    <details>
+    <summary> 1. <s>Community provider ID mismatches</s> <code>✓ Resolved</code> <code>🐞 Bug</code></summary>
+    > <details open>
+    ><summary>Description</summary>
+    ><pre>The bundled Community Outpost definition is keyed as <b>community-outpost</b>.</pre>
+    ></details>
+    > <details>
+    ><summary>Relevance</summary>
+    > `••• Strong`
+    > <code>[PR #198](https://github.com/community-outpost/GenHub/pull/198)</code>
+    ></details>
+    </details>
+    """
+    cleaned = clean_github_markdown(raw, repo="community-outpost/GenHub")
+    assert "**1. ~~Community provider ID mismatches~~ `✓ Resolved` `🐞 Bug`:**" in cleaned or "Community provider ID mismatches" in cleaned
+    assert "> **Description:**" in cleaned
+    assert "The bundled Community Outpost definition is keyed as **community-outpost**." in cleaned
+    assert "[PR #198](https://github.com/community-outpost/GenHub/pull/198)" in cleaned
+    # Ensure no nested broken markdown links
+    assert "[PR [#198]" not in cleaned
+
+
+def test_clean_github_markdown_tables_and_callouts():
+    from GenHub.utils import clean_github_markdown
+    raw = """
+    | Severity | Count |
+    |---|---|
+    | CRITICAL | 0 |
+    | SUGGESTION | 11 |
+
+    > [!WARNING]
+    > Review limit reached!
+
+    > [!NOTE]
+    > This is a note.
+    """
+    cleaned = clean_github_markdown(raw)
+    assert "• **CRITICAL**: 0" in cleaned
+    assert "• **SUGGESTION**: 11" in cleaned
+    assert "> ⚠️ **Warning:**" in cleaned
+    assert "> Review limit reached!" in cleaned
+    assert "> 📝 **Note:**" in cleaned
+    assert "> This is a note." in cleaned
+
+
 def test_create_comment_embed():
     from GenHub.utils import create_comment_embed
     embed = create_comment_embed(

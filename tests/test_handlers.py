@@ -442,3 +442,42 @@ async def test_handle_release():
     await handler.handle_release(data, "owner/repo")
     updates_ch.send.assert_awaited()
 
+
+@pytest.mark.asyncio
+async def test_handler_logging_levels():
+    cog = Mock()
+    cog.config = Mock()
+    cog.config.log_channel_id = AsyncMock(return_value=123)
+    cog.config.log_level = AsyncMock(return_value="info")
+    log_ch = AsyncMock()
+    cog.bot = Mock()
+    cog.bot.get_channel = Mock(return_value=log_ch)
+
+    handler = GitHubEventHandlers(cog)
+
+    # In 'info' level: error, info, audit should send, debug should not
+    await handler.log_error("test error")
+    assert log_ch.send.await_count == 1
+
+    await handler.log_info("test info")
+    assert log_ch.send.await_count == 2
+
+    await handler.log_audit("test audit")
+    assert log_ch.send.await_count == 3
+
+    await handler.log_debug("test debug")
+    # Debug should NOT trigger log_ch.send in 'info' mode
+    assert log_ch.send.await_count == 3
+
+    # Switch to 'all' / 'verbose' level
+    cog.config.log_level = AsyncMock(return_value="all")
+    await handler.log_debug("test debug 2")
+    assert log_ch.send.await_count == 4
+
+    # Switch to 'errors' level
+    cog.config.log_level = AsyncMock(return_value="errors")
+    await handler.log_info("test info 2")
+    assert log_ch.send.await_count == 4  # Still 4, info ignored
+    await handler.log_error("test error 2")
+    assert log_ch.send.await_count == 5
+

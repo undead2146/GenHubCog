@@ -20,6 +20,7 @@ class GenHub(commands.Cog):
             "github_secret": "",
             "allowed_repos": [],
             "log_channel_id": None,
+            "log_level": "info",
             "issues_forum_id": None,
             "prs_forum_id": None,
             "issues_feed_chat_id": None,
@@ -27,6 +28,7 @@ class GenHub(commands.Cog):
             "updates_channel_id": None,
             "contributor_role_id": None,
             "github_token": "",
+            "whitelisted_users": [135370180913004544],
             "thread_cache": {},
         }
         self.config.register_global(**default_global)

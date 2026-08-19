@@ -76,6 +76,7 @@ class SlashCommands:
         updates_channel: discord.abc.GuildChannel = None,
         issues_chat: discord.abc.GuildChannel = None,
         prs_chat: discord.abc.GuildChannel = None,
+        log_level: str = None,
     ):
         """Configure GenHub using Discord native dropdown selectors."""
         summary = ["✅ **GenHub Configuration Updated via Slash UI:**", ""]
@@ -103,6 +104,12 @@ class SlashCommands:
         if log_channel:
             await self.cog.config.log_channel_id.set(log_channel.id)
             summary.append(f"• **Log Channel:** {log_channel.mention} (`{log_channel.id}`)")
+
+        if log_level:
+            clean_level = log_level.lower().strip()
+            stored = "errors" if clean_level in ("error", "errors") else ("all" if clean_level in ("verbose", "debug", "all") else "info")
+            await self.cog.config.log_level.set(stored)
+            summary.append(f"• **Log Level:** `{stored}`")
 
         if contributor_role:
             await self.cog.config.contributor_role_id.set(contributor_role.id)
