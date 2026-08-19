@@ -68,12 +68,13 @@ class GitHubEventHandlers:
 
     async def _get_config_id(self, key):
         """Safely fetch a channel/role ID from cog config without crashing on Mock objects."""
+        import inspect
         if not hasattr(self.cog, "config") or not hasattr(self.cog.config, key):
             return None
         attr = getattr(self.cog.config, key)
         try:
             val = attr()
-            if asyncio.iscoroutine(val):
+            if inspect.isawaitable(val):
                 return await val
             if isinstance(val, int):
                 return val
@@ -217,13 +218,20 @@ class GitHubEventHandlers:
     # ---------------------------
 
     async def process_payload(self, request, data):
-        repo_full_name = data.get("repository", {}).get("full_name")
-        allowed_repos = await self.cog.config.allowed_repos()
-        normalized_allowed = [r.lower().strip().lstrip("/") for r in allowed_repos]
-
         event_type = request.headers.get("X-GitHub-Event", "unknown")
         action = data.get("action", "")
         action_suffix = f".{action}" if action else ""
+
+        if event_type == "ping":
+            zen = data.get("zen", "No zen")
+            hook_id = data.get("hook_id", "N/A")
+            print(f"🏓 [Webhook] Ping received from GitHub (Hook ID: {hook_id}) | Zen: {zen}")
+            await self.log_audit(f"🏓 **GitHub Webhook Ping Received!** (Hook ID: `{hook_id}` • Zen: *{zen}*)")
+            return
+
+        repo_full_name = data.get("repository", {}).get("full_name")
+        allowed_repos = await self.cog.config.allowed_repos()
+        normalized_allowed = [r.lower().strip().lstrip("/") for r in allowed_repos]
 
         if not repo_full_name or repo_full_name.lower().strip().lstrip("/") not in normalized_allowed:
             warn_msg = f"⚠️ [Webhook] Ignored '{event_type}{action_suffix}' for '{repo_full_name}': not in allowed_repos list (Configured: {allowed_repos}). Run '!genhub addrepo {repo_full_name}' to allow."
