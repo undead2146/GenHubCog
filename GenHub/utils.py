@@ -1,7 +1,7 @@
 import discord
 import re
 
-def clean_github_markdown(text: str) -> str:
+def clean_github_markdown(text: str, repo: str = None) -> str:
     """Clean and convert GitHub-specific HTML and markdown tags into clean Discord markdown."""
     if not text:
         return ""
@@ -47,10 +47,15 @@ def clean_github_markdown(text: str) -> str:
     # 8. Auto-link repository issues/PRs (e.g. community-outpost/GenHub#267) if not already part of a link
     text = re.sub(r"(?<!\]\()(?<!\[)\b([a-zA-Z0-9_.-]+/[a-zA-Z0-9_.-]+)#(\d+)\b", r"[\1#\2](https://github.com/\1/issues/\2)", text)
 
-    # 9. Clean status suffixes like [merged], [open], [closed] to prevent markdown collision
+    # 9. Auto-link standalone #123 if repo context is provided
+    if repo:
+        clean_repo = repo.strip().lstrip("/")
+        text = re.sub(r"(?<!\]\()(?<!\[)(?<![a-zA-Z0-9_./&#])#(\d+)\b", rf"[#\1](https://github.com/{clean_repo}/issues/\1)", text)
+
+    # 10. Clean status suffixes like [merged], [open], [closed] to prevent markdown collision
     text = re.sub(r"\[(merged|open|closed|draft)\](?!\()", r"(\1)", text, flags=re.IGNORECASE)
 
-    # 10. Clean extra whitespace
+    # 11. Clean extra whitespace
     text = re.sub(r"\n{3,}", "\n\n", text)
     return text.strip()
 
@@ -63,9 +68,12 @@ def create_comment_embed(
     is_bot: bool = False,
     is_review: bool = False,
     extra_count: int = 0,
+    created_at: str = None,
+    repo: str = None,
 ) -> discord.Embed:
-    """Create a sleek Discord Embed for a GitHub issue or review comment."""
-    clean_body = clean_github_markdown(body)
+    """Create a sleek Discord Embed for a GitHub issue or review comment with timestamp."""
+    import datetime
+    clean_body = clean_github_markdown(body, repo=repo)
 
     if len(clean_body) > 2040:
         clean_body = clean_body[:1950].rstrip() + f"\n\n... *([Read full comment on GitHub](<{url}>))*"
@@ -84,10 +92,18 @@ def create_comment_embed(
         icon_url=author_icon if author_icon else "https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png",
     )
 
+    # Attach creation timestamp if available
+    if created_at:
+        try:
+            ts_str = str(created_at).replace("Z", "+00:00")
+            embed.timestamp = datetime.datetime.fromisoformat(ts_str)
+        except Exception:
+            pass
+
     if extra_count > 0:
         embed.set_footer(text=f"↳ Also submitted {extra_count} additional automated review comments on GitHub")
     else:
-        embed.set_footer(text="GitHub Discussion")
+        embed.set_footer(text="GitHub Comment")
 
     return embed
 
@@ -175,11 +191,12 @@ def is_bot_author(author_login: str, user_data: dict = None) -> bool:
 
 
 
-def format_message(emoji, action, title, url, author, role_mention, extra=""):
-    """Format a standard message for issues/PRs."""
-    # Keep action plain (no bold) so tests that match substrings like
-    # "🆕 Issue created" succeed consistently.
-    msg = f"{emoji} {action}: [{title}]({url})\n"
+def format_message(emoji, action, title, url, author, role_mention, extra="", number=None):
+    """Format a standard message for issues/PRs with clickable title/number."""
+    display_title = title
+    if number is not None and not str(title).strip().startswith(f"#{number}") and not str(title).strip().startswith(f"[#{number}]"):
+        display_title = f"#{number} {title}"
+    msg = f"{emoji} {action}: [{display_title}]({url})\n"
     msg += f"👤 By: {author} {role_mention}"
     if extra:
         msg += f"\n{extra}"

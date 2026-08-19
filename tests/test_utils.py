@@ -40,28 +40,34 @@ def test_clean_github_markdown():
     <sub>Check the box below or use the [coderabbitai](coderabbitai) plan command.</sub>
     [ ] Create Plan
     community-outpost/GenHub#267 - feat: test
+    Fixes #256 as well
     """
-    clean_sample = clean_github_markdown(sample)
+    clean_sample = clean_github_markdown(sample, repo="community-outpost/GenHub")
     assert "<sub>" not in clean_sample
     assert "*Check the box below" in clean_sample
     assert "`coderabbitai`" in clean_sample
     assert "⬜ Create Plan" in clean_sample
     assert "[community-outpost/GenHub#267](https://github.com/community-outpost/GenHub/issues/267)" in clean_sample
+    assert "[#256](https://github.com/community-outpost/GenHub/issues/256)" in clean_sample
 
 
 def test_create_comment_embed():
     from GenHub.utils import create_comment_embed
     embed = create_comment_embed(
         author="coderabbitai[bot]",
-        body="<!-- hide -->**Review** body",
+        body="<!-- hide -->**Review** body with #100",
         url="https://github.com/test/1",
         is_bot=True,
         is_review=True,
         extra_count=5,
+        created_at="2026-08-19T01:15:00Z",
+        repo="community-outpost/GenHub",
     )
     assert "Review" in embed.description
     assert "coderabbitai[bot]" in embed.author.name
     assert "5" in embed.footer.text
+    assert embed.timestamp is not None
+    assert "[#100](https://github.com/community-outpost/GenHub/issues/100)" in embed.description
 
 
 

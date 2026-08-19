@@ -75,7 +75,7 @@ class GitHubEventHandlers:
         try:
             val = attr()
             if inspect.isawaitable(val):
-                return await val
+                val = await val
             if isinstance(val, int):
                 return val
             return None
@@ -186,7 +186,7 @@ class GitHubEventHandlers:
         comments.sort(key=lambda c: c.get('created_at', ''))
         return comments
 
-    async def _post_comment_to_thread(self, thread, comment, role_mention, extra_count: int = 0):
+    async def _post_comment_to_thread(self, thread, comment, role_mention, extra_count: int = 0, repo: str = None):
         """Post a single comment to a Discord thread formatted as a sleek Discord embed."""
         body = comment.get("body", "")
         if not body or body.strip() == "":
@@ -195,6 +195,7 @@ class GitHubEventHandlers:
         author = comment.get("user", {}).get("login", "Unknown") if comment.get("user") else "Unknown"
         author_icon = comment.get("user", {}).get("avatar_url") if comment.get("user") else None
         url = comment.get("html_url", "")
+        created_at = comment.get("created_at")
         is_bot = is_bot_author(author, comment.get("user"))
         is_review = comment.get("is_review_comment", False)
 
@@ -206,6 +207,8 @@ class GitHubEventHandlers:
             is_bot=is_bot,
             is_review=is_review,
             extra_count=extra_count,
+            created_at=created_at,
+            repo=repo,
         )
 
         try:
@@ -484,6 +487,7 @@ class GitHubEventHandlers:
 
         author_icon = data["comment"]["user"].get("avatar_url") if data["comment"].get("user") else None
         is_bot = is_bot_author(author, data["comment"].get("user"))
+        created_at = data["comment"].get("created_at")
         embed = create_comment_embed(
             author=author,
             body=body,
@@ -491,6 +495,8 @@ class GitHubEventHandlers:
             author_icon=author_icon,
             is_bot=is_bot,
             is_review=False,
+            created_at=created_at,
+            repo=repo_full_name,
         )
         await send_message(thread, embed=embed)
 
@@ -549,6 +555,7 @@ class GitHubEventHandlers:
             is_bot = is_bot_author(entry["author"])
             extra_comments = len(entry["comments"]) if (is_bot and len(entry["comments"]) > 1) else 0
 
+            created_at = data.get("review", {}).get("submitted_at") or pr_data.get("created_at")
             if entry["body"]:
                 embed = create_comment_embed(
                     author=entry["author"],
@@ -557,6 +564,8 @@ class GitHubEventHandlers:
                     is_bot=is_bot,
                     is_review=True,
                     extra_count=extra_comments,
+                    created_at=created_at,
+                    repo=repo_full_name,
                 )
                 await send_message(thread, embed=embed)
 
@@ -575,6 +584,8 @@ class GitHubEventHandlers:
                             url=url,
                             is_bot=is_bot,
                             is_review=True,
+                            created_at=created_at,
+                            repo=repo_full_name,
                         )
                         await send_message(thread, embed=embed)
 
@@ -593,9 +604,9 @@ class GitHubEventHandlers:
         author = item["user"]["login"] if item.get("user") else "Unknown"
         forum_id = forum.id
 
-        # For PRs: only reconcile open PRs (don't create threads for closed/merged PRs)
-        if is_pr and item.get("state") != "open":
-            print(f"⏭️ Skipping non-open PR #{number} ({item.get('state')})")
+        # Only reconcile open items (skip closed/merged issues and PRs)
+        if item.get("state") != "open":
+            print(f"⏭️ Skipping non-open {('PR' if is_pr else 'issue')} #{number} ({item.get('state')})")
             return
 
         # Compute desired tags
@@ -612,7 +623,7 @@ class GitHubEventHandlers:
         )
         emoji = "🆕"
         action = "PR created" if is_pr else "Issue created"
-        initial_content = format_message(emoji, action, title, url, author, role_mention)
+        initial_content = format_message(emoji, action, title, url, author, role_mention, number=number)
 
         # Get or create thread
         thread, created = await get_or_create_thread(
@@ -700,7 +711,7 @@ class GitHubEventHandlers:
                     for comment in human_comments:
                         if self.reconcile_cancelled:
                             break
-                        await self._post_comment_to_thread(thread, comment, role_mention)
+                        await self._post_comment_to_thread(thread, comment, role_mention, repo=repo)
                         await asyncio.sleep(0.2)
 
                     # 2. Post bot comments cleanly as 1 embed with extra comment count in footer
@@ -718,6 +729,7 @@ class GitHubEventHandlers:
                             first_bot_comment,
                             role_mention,
                             extra_count=extra_count,
+                            repo=repo,
                         )
                         await asyncio.sleep(0.2)
 
@@ -834,19 +846,19 @@ class GitHubEventHandlers:
 
         print(f"✅ {item_type} forum found: {getattr(forum, 'name', forum_id)} ({forum_id})")
 
-        # Collect all GitHub items (for PRs only fetch open ones)
+        # Collect all GitHub items (only fetch OPEN items for both issues and PRs)
         github_items = {}
         items_to_process = []
         page = 1
         max_pages = 50
-        state_param = "open" if is_pr else "all"
+        state_param = "open"  # Only fetch OPEN issues and OPEN PRs
 
         while page <= max_pages:
             if self.reconcile_cancelled:
                 return
 
             url = f"https://api.github.com/repos/{repo}/{endpoint}?state={state_param}&per_page=100&page={page}"
-            print(f"🌐 Fetching {item_type.lower()} page {page} for {repo}")
+            print(f"🌐 Fetching open {item_type.lower()} page {page} for {repo}")
 
             status, data = await self._make_github_request(session, url)
 
@@ -867,8 +879,8 @@ class GitHubEventHandlers:
                 if not is_pr and item.get("pull_request"):
                     continue
 
-                # If is_pr, skip any non-open PR
-                if is_pr and item.get("state") != "open":
+                # Skip any non-open item
+                if item.get("state") != "open":
                     continue
 
                 number = item["number"]
