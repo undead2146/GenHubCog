@@ -735,7 +735,7 @@ class GitHubEventHandlers:
         is_pr = "pull_request" in issue
         item_label = "PR" if is_pr else "Issue"
         is_bot = is_bot_author(author, comment.get("user")) or is_bot_author(sender)
-        preview = "" if is_bot else format_comment_preview(body)
+        preview = format_comment_preview(body)
         target_user = author if (sender and author and sender != author) else ""
 
         forum_id = await (self.cog.config.prs_forum_id() if is_pr else self.cog.config.issues_forum_id())
@@ -854,7 +854,7 @@ class GitHubEventHandlers:
             forum_id = await self.cog.config.prs_forum_id()
             thread = await find_thread(self.cog.bot, forum_id, repo_full_name, pr_number, self.cog.thread_cache)
             dismissal_msg = review.get("dismissal_message") or review.get("body") or ""
-            preview = "" if is_bot else format_comment_preview(dismissal_msg)
+            preview = format_comment_preview(dismissal_msg)
             await self.log_info(format_log_line("📝 ❌", "PR Review Dismissed", repo_full_name, pr_number, pr.get("title", ""), review_url, sender, item_type="PR", extra=preview, target_user=target_user, thread=thread))
 
     async def handle_pull_request_review_comment(self, data, repo_full_name):
@@ -875,7 +875,7 @@ class GitHubEventHandlers:
         path = comment.get("path", "")
         line = comment.get("line") or comment.get("original_line")
         loc = f"`{path}:{line}`" if path and line else (f"`{path}`" if path else "")
-        preview = "" if is_bot else format_comment_preview(comment_body)
+        preview = format_comment_preview(comment_body)
         extras = [p for p in (loc, preview) if p]
         extra_str = " • ".join(extras)
         target_user = comment_author if (sender and comment_author and sender != comment_author) else ""
@@ -1050,7 +1050,7 @@ class GitHubEventHandlers:
             review_state = data.get("review", {}).get("state", "").upper()
             state_label = {"APPROVED": "✅ Approved", "CHANGES_REQUESTED": "🛑 Changes Requested", "COMMENTED": "💬 Commented"}.get(review_state, "")
             review_body = entry.get("body") or ""
-            preview = "" if is_bot else format_comment_preview(review_body)
+            preview = format_comment_preview(review_body)
             extras = [p for p in (state_label, preview) if p]
             extra_str = " • ".join(extras)
             await self.log_info(format_log_line("📝 🔍", "PR Review Posted", repo_full_name, pr_number, pr_data.get("title", ""), entry["url"], entry["author"], item_type="PR", extra=extra_str, thread=thread))
