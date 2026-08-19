@@ -639,6 +639,8 @@ class GitHubEventHandlers:
                     print(f"⚠️ Failed to send release announcement: {e}")
 
     async def handle_issue_comment(self, data, repo_full_name):
+        if data.get("action") and data.get("action") != "created":
+            return
         issue = data["issue"]
         number, body, author, url = (
             issue["number"],
@@ -690,6 +692,8 @@ class GitHubEventHandlers:
         await self._schedule_flush(repo_full_name, pr_number, review_id, data)
 
     async def handle_pull_request_review_comment(self, data, repo_full_name):
+        if data.get("action") and data.get("action") != "created":
+            return
         pr_number = data["pull_request"]["number"]
         review_id = data["comment"]["pull_request_review_id"]
         comment_body = data["comment"]["body"]
@@ -853,8 +857,9 @@ class GitHubEventHandlers:
                 comments = await self._fetch_comments(session, repo, number, is_pr)
 
                 if comments and not self.reconcile_cancelled:
-                    # Get existing message URLs in thread to avoid duplicates (skip for newly created threads)
+                    # Get existing message URLs and bot authors in thread to avoid duplicates
                     existing_comment_urls = set()
+                    existing_bot_authors = set()
                     if not created:
                         try:
                             async for message in thread.history(limit=50):
@@ -862,6 +867,10 @@ class GitHubEventHandlers:
                                     urls = re.findall(r'https://github\.com/[^/]+/[^/]+/(?:issues|pull)/\d+[#\w\-]+', message.content)
                                     existing_comment_urls.update(urls)
                                 for emb in getattr(message, "embeds", []):
+                                    if emb.author and emb.author.name:
+                                        # e.g. "deepsource-io[bot] (Bot Notice)" -> "deepsource-io[bot]"
+                                        author_token = emb.author.name.split(" ")[0].lower().strip()
+                                        existing_bot_authors.add(author_token)
                                     if emb.author and emb.author.url:
                                         existing_comment_urls.add(emb.author.url)
                                     if emb.description:
@@ -875,14 +884,13 @@ class GitHubEventHandlers:
                     bot_comments_by_author = {}
 
                     for comment in comments:
-                        comment_url = comment.get('html_url', '')
-                        if comment_url and comment_url in existing_comment_urls:
-                            continue
-
                         author_login = comment.get('user', {}).get('login', 'Unknown')
                         if is_bot_author(author_login, comment.get('user')):
                             bot_comments_by_author.setdefault(author_login, []).append(comment)
                         else:
+                            comment_url = comment.get('html_url', '')
+                            if comment_url and comment_url in existing_comment_urls:
+                                continue
                             human_comments.append(comment)
 
                     # 1. Post human comments
@@ -892,23 +900,34 @@ class GitHubEventHandlers:
                         await self._post_comment_to_thread(thread, comment, role_mention, repo=repo)
                         await asyncio.sleep(0.2)
 
-                    # 2. Post bot comments cleanly as 1 embed with extra comment count in footer
+                    # 2. Post bot comments cleanly as at most 1 compact embed per bot (skip if bot already posted in thread)
                     for bot_name, b_comments in bot_comments_by_author.items():
                         if self.reconcile_cancelled:
                             break
                         if not b_comments:
                             continue
 
-                        # Post the primary / first bot comment (with any extra comment count noted in footer)
-                        first_bot_comment = b_comments[0]
+                        # If thread already has an embed from this bot, skip it to avoid duplicate reviews
+                        if bot_name.lower().strip() in existing_bot_authors:
+                            await self.log_debug(f"ℹ️ Skipping bot review from {bot_name} on {repo}#{number} (already in thread)")
+                            continue
+
+                        # Also check if any URL from b_comments is already in existing_comment_urls
+                        if any(c.get('html_url', '') in existing_comment_urls for c in b_comments if c.get('html_url')):
+                            continue
+
+                        # Sort comments chronologically and post the latest/most recent review status
+                        b_comments.sort(key=lambda c: c.get('created_at', ''))
+                        latest_bot_comment = b_comments[-1]
                         extra_count = len(b_comments) - 1
                         await self._post_comment_to_thread(
                             thread,
-                            first_bot_comment,
+                            latest_bot_comment,
                             role_mention,
                             extra_count=extra_count,
                             repo=repo,
                         )
+                        existing_bot_authors.add(bot_name.lower().strip())
                         await asyncio.sleep(0.2)
 
             except Exception as e:
