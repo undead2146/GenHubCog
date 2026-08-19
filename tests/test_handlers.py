@@ -415,3 +415,30 @@ async def test_reconcile_repo_filter_and_bad_status(monkeypatch):
 
     await handler.reconcile_forum_tags(repo_filter="owner/repo")
     await handler.reconcile_forum_tags(repo_filter=None)
+
+
+@pytest.mark.asyncio
+async def test_handle_release():
+    cog = Mock()
+    cog.config = Mock()
+    cog.config.updates_channel_id = AsyncMock(return_value=999)
+    updates_ch = AsyncMock()
+    cog.bot = Mock()
+    cog.bot.get_channel = Mock(return_value=updates_ch)
+
+    handler = GitHubEventHandlers(cog)
+
+    data = {
+        "action": "published",
+        "release": {
+            "tag_name": "v1.3.0",
+            "name": "GeneralsHub 1.3.0",
+            "body": "## Changes\n- New feature",
+            "html_url": "https://github.com/owner/repo/releases/v1.3.0",
+            "author": {"login": "dev", "avatar_url": "https://avatar.url"},
+        }
+    }
+
+    await handler.handle_release(data, "owner/repo")
+    updates_ch.send.assert_awaited()
+

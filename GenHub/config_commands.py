@@ -256,6 +256,11 @@ class ConfigCommands(commands.Cog):
         """Set the PR Feed Chat channel ID."""
         await self._set_config(ctx, "prs_feed_chat_id", channel_id)
 
+    @genhub.command(aliases=["updateschannel", "updatesforum", "updatesfeed", "pinnedupdates"])
+    async def updates(self, ctx, channel_id: int):
+        """Set the Pinned Updates channel / forum post ID for development and release announcements."""
+        await self._set_config(ctx, "updates_channel_id", channel_id)
+
     @genhub.command(aliases=["openprs", "pulls", "prs"])
     async def openpullrequests(self, ctx, repo: str = None):
         """Display all open Pull Requests in an interactive paginated embed."""
@@ -603,6 +608,7 @@ class ConfigCommands(commands.Cog):
             f"**PRs Forum ID:** {config.get('prs_forum_id')}\n"
             f"**Issues Feed Chat ID:** {config.get('issues_feed_chat_id')}\n"
             f"**PRs Feed Chat ID:** {config.get('prs_feed_chat_id')}\n"
+            f"**Updates Channel ID:** {config.get('updates_channel_id')}\n"
             f"**Contributor Role ID:** {config.get('contributor_role_id')}\n"
         )
         await ctx.send(message)
@@ -662,6 +668,17 @@ class ConfigCommands(commands.Cog):
                 lines.append(f"• PRs Forum: ❌ Channel ID `{prs_id}` not found")
         else:
             lines.append("• PRs Forum: ⚠️ Not configured (`!genhub prsforum <id>`)")
+
+        # Check Updates Channel
+        updates_id = config.get("updates_channel_id")
+        if updates_id:
+            ch = self.cog.bot.get_channel(updates_id)
+            if ch:
+                lines.append(f"• Updates Feed: `{ch.name}` ({updates_id}) → ✅ Active")
+            else:
+                lines.append(f"• Updates Feed: ❌ Channel ID `{updates_id}` not found")
+        else:
+            lines.append("• Updates Feed: ℹ️ Not configured (optional: `!genhub updates <id>`)")
 
         # Check Log Channel
         log_id = config.get("log_channel_id")

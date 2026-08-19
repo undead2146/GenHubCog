@@ -126,7 +126,7 @@ async def test_other_setters_and_showconfig():
             for key in [
                 "webhook_host", "webhook_port", "github_secret",
                 "log_channel_id", "issues_forum_id", "prs_forum_id",
-                "issues_feed_chat_id", "prs_feed_chat_id",
+                "issues_feed_chat_id", "prs_feed_chat_id", "updates_channel_id",
                 "contributor_role_id", "github_token"
             ]:
                 setattr(self.config, key, DummyConfigEntry())
@@ -148,6 +148,7 @@ async def test_other_setters_and_showconfig():
     await cmd.prsforum(ctx, 333)
     await cmd.issuesfeedchat(ctx, 444)
     await cmd.prsfeedchat(ctx, 555)
+    await cmd.updates(ctx, 777)
     await cmd.contributorrole(ctx, 666)
 
     # showconfig
@@ -163,6 +164,7 @@ async def test_other_setters_and_showconfig():
             "prs_forum_id": 3,
             "issues_feed_chat_id": 4,
             "prs_feed_chat_id": 5,
+            "updates_channel_id": 7,
             "contributor_role_id": 6,
         }
     cog.config.all = fake_all

@@ -24,6 +24,7 @@ class GenHub(commands.Cog):
             "prs_forum_id": None,
             "issues_feed_chat_id": None,
             "prs_feed_chat_id": None,
+            "updates_channel_id": None,
             "contributor_role_id": None,
             "github_token": "",
             "thread_cache": {},

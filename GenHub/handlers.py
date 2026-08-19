@@ -203,6 +203,7 @@ class GitHubEventHandlers:
             "issue_comment": self.handle_issue_comment,
             "pull_request_review": self.handle_pull_request_review,
             "pull_request_review_comment": self.handle_pull_request_review_comment,
+            "release": self.handle_release,
         }
         handler = handlers.get(event_type)
         if handler:
@@ -358,6 +359,77 @@ class GitHubEventHandlers:
                         await chat_ch.send(f"🔄 **PR Reopened:** [#{number} {title}]({url}){thread_suffix} • By **{author}**")
                 except Exception as e:
                     print(f"⚠️ Failed to send PR chat notification: {e}")
+
+        # Send development milestone announcement to Pinned Updates channel (No role mentions)
+        if action == "closed" and (pr.get("merged") or pr.get("merged_at")):
+            base_ref = pr.get("base", {}).get("ref", "main")
+            updates_ch_id = await self._get_config_id("updates_channel_id")
+            if updates_ch_id:
+                updates_ch = self.cog.bot.get_channel(updates_ch_id)
+                if updates_ch:
+                    try:
+                        clean_body = clean_github_markdown(pr.get("body", ""))
+                        if len(clean_body) > 600:
+                            clean_body = clean_body[:550].rstrip() + f"... *([Read more on GitHub](<{url}>))*"
+
+                        embed = discord.Embed(
+                            title=f"🚀 Development Update: PR #{number} Merged into `{base_ref}`",
+                            url=url,
+                            description=f"**[{title}]({url})**\n\n" + (clean_body if clean_body else f"Merged by {author} into `{base_ref}`."),
+                            color=0x23A55A,
+                        )
+                        author_icon = pr.get("user", {}).get("avatar_url")
+                        embed.set_author(
+                            name=f"{author} ({repo_full_name})",
+                            url=f"https://github.com/{author}",
+                            icon_url=author_icon if author_icon else "https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png",
+                        )
+                        thread_ref = f"<#{thread.id}>" if thread else ""
+                        if thread_ref:
+                            embed.add_field(name="Discussion Thread", value=thread_ref, inline=True)
+                        embed.set_footer(text=f"GeneralsHub Development Feed • {repo_full_name}")
+                        await updates_ch.send(embed=embed)
+                    except Exception as e:
+                        print(f"⚠️ Failed to send pinned update on merge: {e}")
+
+    async def handle_release(self, data, repo_full_name):
+        """Handle GitHub release events and announce to Pinned Updates channel."""
+        action = data.get("action")
+        if action not in ("published", "created", "released"):
+            return
+
+        release = data.get("release", {})
+        tag_name = release.get("tag_name", "")
+        name = release.get("name") or tag_name or "New Release"
+        body = release.get("body", "")
+        url = release.get("html_url", "")
+        author = release.get("author", {}).get("login", "Unknown")
+        author_icon = release.get("author", {}).get("avatar_url")
+
+        updates_ch_id = await self._get_config_id("updates_channel_id")
+        if updates_ch_id:
+            updates_ch = self.cog.bot.get_channel(updates_ch_id)
+            if updates_ch:
+                try:
+                    clean_body = clean_github_markdown(body)
+                    if len(clean_body) > 1800:
+                        clean_body = clean_body[:1700].rstrip() + f"\n\n... *([Read full release notes on GitHub](<{url}>))*"
+
+                    embed = discord.Embed(
+                        title=f"🎉 Official Release: {name} ({tag_name})",
+                        url=url,
+                        description=clean_body if clean_body else f"A new version **{tag_name}** is now available.",
+                        color=0x5865F2,
+                    )
+                    embed.set_author(
+                        name=f"Published by {author} ({repo_full_name})",
+                        url=url,
+                        icon_url=author_icon if author_icon else "https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png",
+                    )
+                    embed.set_footer(text=f"GeneralsHub Official Release • {repo_full_name}")
+                    await updates_ch.send(embed=embed)
+                except Exception as e:
+                    print(f"⚠️ Failed to send release announcement: {e}")
 
     async def handle_issue_comment(self, data, repo_full_name):
         issue = data["issue"]
