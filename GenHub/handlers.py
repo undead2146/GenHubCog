@@ -735,7 +735,7 @@ class GitHubEventHandlers:
         is_pr = "pull_request" in issue
         item_label = "PR" if is_pr else "Issue"
         is_bot = is_bot_author(author, comment.get("user")) or is_bot_author(sender)
-        preview = format_comment_preview(body)
+        preview = "" if is_bot else format_comment_preview(body)
         target_user = author if (sender and author and sender != author) else ""
 
         forum_id = await (self.cog.config.prs_forum_id() if is_pr else self.cog.config.issues_forum_id())
@@ -745,6 +745,15 @@ class GitHubEventHandlers:
         if action == "created":
             if not body or not body.strip():
                 return
+
+            # If this is a bot comment on a PR, route to unified bot review aggregator
+            if is_pr and is_bot:
+                author_icon = comment.get("user", {}).get("avatar_url") if comment.get("user") else None
+                await self._schedule_bot_review(
+                    repo_full_name, number, author, data, body=body, url=url, author_icon=author_icon
+                )
+                return
+
             thread, _ = await get_or_create_thread(
                 self.cog.bot, forum_id, repo_full_name, number, issue["title"], issue["html_url"], tags, self.cog.thread_cache
             )
@@ -753,7 +762,6 @@ class GitHubEventHandlers:
                 return
 
             author_icon = comment.get("user", {}).get("avatar_url") if comment.get("user") else None
-            is_bot = is_bot_author(author, comment.get("user"))
             created_at = comment.get("created_at")
             embed = create_comment_embed(
                 author=author,
@@ -770,7 +778,6 @@ class GitHubEventHandlers:
 
         elif action == "edited":
             thread = await find_thread(self.cog.bot, forum_id, repo_full_name, number, self.cog.thread_cache)
-            # Debounced logging for bot edit storms (e.g. DeepSource updating 5 times in 3 seconds)
             if self._should_log_bot_edit(repo_full_name, number, sender or author):
                 await self.log_info(format_log_line("💬 ✏️", "Comment Edited", repo_full_name, number, issue.get("title", ""), url, sender, item_type=item_label, extra=preview, target_user=target_user, thread=thread))
             else:
@@ -828,20 +835,26 @@ class GitHubEventHandlers:
         review_url = review.get("html_url", "")
         sender = data.get("sender", {}).get("login", "") or review_author
         target_user = review_author if (sender and review_author and sender != review_author) else ""
+        is_bot = is_bot_author(review_author, review.get("user")) or is_bot_author(sender)
 
         if action == "submitted":
-            key = (repo_full_name, pr_number, review_id)
-            entry = self.pending_reviews.setdefault(
-                key, {"author": review_author, "url": review_url, "body": None, "comments": []}
-            )
-            entry["body"] = review_body
-            await self._schedule_flush(repo_full_name, pr_number, review_id, data)
+            if is_bot:
+                author_icon = review.get("user", {}).get("avatar_url") if review.get("user") else None
+                await self._schedule_bot_review(
+                    repo_full_name, pr_number, review_author, data, body=review_body, url=review_url, author_icon=author_icon
+                )
+            else:
+                key = (repo_full_name, pr_number, review_id)
+                entry = self.pending_reviews.setdefault(
+                    key, {"author": review_author, "url": review_url, "body": None, "comments": []}
+                )
+                entry["body"] = review_body
+                await self._schedule_flush(repo_full_name, pr_number, review_id, data)
         elif action == "dismissed":
             forum_id = await self.cog.config.prs_forum_id()
             thread = await find_thread(self.cog.bot, forum_id, repo_full_name, pr_number, self.cog.thread_cache)
             dismissal_msg = review.get("dismissal_message") or review.get("body") or ""
-            is_bot = is_bot_author(review_author, review.get("user")) or is_bot_author(sender)
-            preview = format_comment_preview(dismissal_msg)
+            preview = "" if is_bot else format_comment_preview(dismissal_msg)
             await self.log_info(format_log_line("📝 ❌", "PR Review Dismissed", repo_full_name, pr_number, pr.get("title", ""), review_url, sender, item_type="PR", extra=preview, target_user=target_user, thread=thread))
 
     async def handle_pull_request_review_comment(self, data, repo_full_name):
@@ -862,18 +875,24 @@ class GitHubEventHandlers:
         path = comment.get("path", "")
         line = comment.get("line") or comment.get("original_line")
         loc = f"`{path}:{line}`" if path and line else (f"`{path}`" if path else "")
-        preview = format_comment_preview(comment_body)
+        preview = "" if is_bot else format_comment_preview(comment_body)
         extras = [p for p in (loc, preview) if p]
         extra_str = " • ".join(extras)
         target_user = comment_author if (sender and comment_author and sender != comment_author) else ""
 
         if action == "created":
-            key = (repo_full_name, pr_number, review_id)
-            entry = self.pending_reviews.setdefault(
-                key, {"author": comment_author, "url": comment_url, "body": None, "comments": []}
-            )
-            entry["comments"].append((comment_body, comment_url))
-            await self._schedule_flush(repo_full_name, pr_number, review_id, data)
+            if is_bot:
+                author_icon = comment.get("user", {}).get("avatar_url") if comment.get("user") else None
+                await self._schedule_bot_review(
+                    repo_full_name, pr_number, comment_author, data, body=None, url=comment_url, author_icon=author_icon, inline_comment=(comment_body, comment_url)
+                )
+            else:
+                key = (repo_full_name, pr_number, review_id)
+                entry = self.pending_reviews.setdefault(
+                    key, {"author": comment_author, "url": comment_url, "body": None, "comments": []}
+                )
+                entry["comments"].append((comment_body, comment_url))
+                await self._schedule_flush(repo_full_name, pr_number, review_id, data)
 
         elif action == "edited":
             thread = await find_thread(self.cog.bot, forum_id, repo_full_name, pr_number, self.cog.thread_cache)
@@ -888,7 +907,6 @@ class GitHubEventHandlers:
             msg = await find_comment_message(thread, comment_url, comment_author)
             if msg:
                 author_icon = comment.get("user", {}).get("avatar_url") if comment.get("user") else None
-                is_bot = is_bot_author(comment_author, comment.get("user"))
                 updated_at = comment.get("updated_at") or comment.get("created_at")
                 embed = create_comment_embed(
                     author=comment_author,
@@ -920,6 +938,89 @@ class GitHubEventHandlers:
                 except Exception as e:
                     print(f"⚠️ Failed to delete review comment in PR #{pr_number}: {e}")
 
+    async def _schedule_bot_review(self, repo_full_name, pr_number, author, data, body=None, url=None, author_icon=None, inline_comment=None):
+        """Aggregate all bot reviews, notices, and inline comments for a PR into ONE single unified Discord message."""
+        key = (repo_full_name, pr_number, author.lower().strip())
+        entry = self.pending_reviews.setdefault(
+            key, {
+                "author": author,
+                "url": url or "",
+                "body": None,
+                "comments": [],
+                "author_icon": author_icon,
+                "created_at": None,
+                "data": data,
+            }
+        )
+        if body and body.strip():
+            if not entry["body"] or len(body.strip()) > len(entry["body"]):
+                entry["body"] = body.strip()
+        if url and not entry["url"]:
+            entry["url"] = url
+        if author_icon and not entry["author_icon"]:
+            entry["author_icon"] = author_icon
+        if inline_comment:
+            entry["comments"].append(inline_comment)
+
+        pr_data = data.get("pull_request") or data.get("issue") or {}
+        created_at = data.get("review", {}).get("submitted_at") or data.get("comment", {}).get("created_at") or pr_data.get("created_at")
+        if created_at:
+            entry["created_at"] = created_at
+
+        async def flush_bot_review():
+            await asyncio.sleep(6.0)
+            ent = self.pending_reviews.pop(key, None)
+            if not ent:
+                return
+
+            forum_id = await self.cog.config.prs_forum_id()
+            forum = await self._resolve_target_channel(forum_id)
+            pr_info = ent["data"].get("pull_request") or ent["data"].get("issue") or {}
+            if not pr_info:
+                return
+
+            tags = await get_pr_tags(forum, pr_info)
+            thread, _ = await get_or_create_thread(
+                self.cog.bot, forum_id, repo_full_name, pr_number, pr_info.get("title", f"PR #{pr_number}"), pr_info.get("html_url", ""), tags, self.cog.thread_cache
+            )
+            if not thread:
+                return
+
+            comment_count = len(ent["comments"])
+            review_body = ent.get("body")
+            if not review_body and ent["comments"]:
+                review_body = ent["comments"][0][0]
+
+            embed = create_comment_embed(
+                author=ent["author"],
+                body=review_body or "*Automated code review findings submitted on GitHub.*",
+                url=ent["url"],
+                author_icon=ent.get("author_icon"),
+                is_bot=True,
+                is_review=True,
+                extra_count=comment_count,
+                created_at=ent.get("created_at"),
+                repo=repo_full_name,
+            )
+            view = create_review_link_view(ent["url"], comment_count) if comment_count > 0 else create_review_link_view(ent["url"], 1)
+
+            # Check if a message from this bot already exists in the thread
+            existing_msg = await find_comment_message(thread, ent["url"], ent["author"])
+            if existing_msg:
+                try:
+                    await existing_msg.edit(embed=embed, view=view)
+                    print(f"📝 Live-updated existing bot review in PR #{pr_number} for {ent['author']} ({comment_count} comments)")
+                    return
+                except Exception as e:
+                    print(f"⚠️ Failed to edit existing bot review in PR #{pr_number}: {e}")
+
+            await send_message(thread, embed=embed, view=view)
+            print(f"✅ Posted unified bot review in PR #{pr_number} for {ent['author']} ({comment_count} comments)")
+
+        if key in self.pending_reviews and "task" in self.pending_reviews[key]:
+            self.pending_reviews[key]["task"].cancel()
+        self.pending_reviews[key]["task"] = asyncio.create_task(flush_bot_review())
+
     async def _schedule_flush(self, repo_full_name, pr_number, review_id, data):
         key = (repo_full_name, pr_number, review_id)
 
@@ -949,7 +1050,7 @@ class GitHubEventHandlers:
             review_state = data.get("review", {}).get("state", "").upper()
             state_label = {"APPROVED": "✅ Approved", "CHANGES_REQUESTED": "🛑 Changes Requested", "COMMENTED": "💬 Commented"}.get(review_state, "")
             review_body = entry.get("body") or ""
-            preview = format_comment_preview(review_body)
+            preview = "" if is_bot else format_comment_preview(review_body)
             extras = [p for p in (state_label, preview) if p]
             extra_str = " • ".join(extras)
             await self.log_info(format_log_line("📝 🔍", "PR Review Posted", repo_full_name, pr_number, pr_data.get("title", ""), entry["url"], entry["author"], item_type="PR", extra=extra_str, thread=thread))
@@ -968,26 +1069,17 @@ class GitHubEventHandlers:
                 await send_message(thread, embed=embed, view=view)
 
             if entry["comments"]:
-                if is_bot and len(entry["comments"]) > 1:
-                    if not entry["body"]:
-                        bot_summary = (
-                            f"🤖 **{entry['author']}** submitted **{len(entry['comments'])} inline review comments** on GitHub.\n"
-                            f"> 🔍 [**Click here to inspect all {len(entry['comments'])} comments on GitHub ➔**](<{entry['url']}>)"
-                        )
-                        btn_view = create_review_link_view(entry["url"], len(entry["comments"]))
-                        await send_message(thread, bot_summary, view=btn_view)
-                else:
-                    for i, (body, url) in enumerate(reversed(entry["comments"])):
-                        embed = create_comment_embed(
-                            author=entry["author"],
-                            body=body,
-                            url=url,
-                            is_bot=is_bot,
-                            is_review=True,
-                            created_at=created_at,
-                            repo=repo_full_name,
-                        )
-                        await send_message(thread, embed=embed)
+                for i, (body, url) in enumerate(reversed(entry["comments"])):
+                    embed = create_comment_embed(
+                        author=entry["author"],
+                        body=body,
+                        url=url,
+                        is_bot=is_bot,
+                        is_review=True,
+                        created_at=created_at,
+                        repo=repo_full_name,
+                    )
+                    await send_message(thread, embed=embed)
 
         if key in self.pending_reviews and "task" in self.pending_reviews[key]:
             self.pending_reviews[key]["task"].cancel()
@@ -1342,7 +1434,10 @@ class GitHubEventHandlers:
                     processed_count += 1
                     if ctx and not self.reconcile_cancelled and (processed_count % 15 == 0 or processed_count == total_count):
                         pct = int((processed_count / total_count) * 100)
-                        await ctx.send(f"📊 **Progress ({repo_name} {item_type}):** {processed_count}/{total_count} processed ({pct}%)")
+                        try:
+                            await ctx.send(f"📊 **Progress ({repo_name} {item_type}):** {processed_count}/{total_count} processed ({pct}%)")
+                        except Exception as send_err:
+                            await self.log_error(f"⚠️ Failed to send progress update: {send_err}")
 
         tasks = [worker(item, i + 1) for i, item in enumerate(items_to_process)]
         await asyncio.gather(*tasks)
