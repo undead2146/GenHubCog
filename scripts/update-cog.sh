@@ -23,8 +23,12 @@ fi
 
 # 2. Sync files into redbot data directory
 echo -e "\n\033[0;33mSyncing cog files to RedBot data...\033[0m"
-sudo cp -r "$DIR/GenHub/"* "$DIR/redbot-data/cogs/GenHub/" 2>/dev/null || true
-sudo cp -r "$DIR/GenHub/"* "$DIR/redbot-data/cogs/CogManager/cogs/GenHub/" 2>/dev/null || true
+sudo cp -rf "$DIR/GenHub/"* "$DIR/redbot-data/cogs/GenHub/" 2>/dev/null || true
+for cog_dir in "$DIR/redbot-data/cogs/CogManager/cogs/GenHub" "$DIR/redbot-data/cogs/Downloader/lib/genhub/GenHub" "$DIR/redbot-data/cogs/RepoManager/repos/genhubcog/GenHub"; do
+    if [ -d "$cog_dir" ]; then
+        sudo cp -rf "$DIR/GenHub/"* "$cog_dir/" 2>/dev/null || true
+    fi
+done
 sudo chown -R 1000:1000 "$DIR/redbot-data"
 sudo chmod -R 775 "$DIR/redbot-data"
 

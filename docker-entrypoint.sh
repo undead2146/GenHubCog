@@ -51,9 +51,15 @@ EOF
     echo "Core settings created"
 fi
 
-# Ensure GenHub cog is up to date in cogs directory
+# Ensure GenHub cog is up to date in all cogs directories
 mkdir -p /home/redbot/redbot-data/cogs/GenHub
-cp -r /home/redbot/GenHubCog/GenHub/* /home/redbot/redbot-data/cogs/GenHub/
+cp -rf /home/redbot/GenHubCog/GenHub/* /home/redbot/redbot-data/cogs/GenHub/ 2>/dev/null || true
+
+for cog_dir in /home/redbot/redbot-data/cogs/CogManager/cogs/GenHub /home/redbot/redbot-data/cogs/Downloader/lib/genhub/GenHub /home/redbot/redbot-data/cogs/RepoManager/repos/genhubcog/GenHub; do
+    if [ -d "$cog_dir" ]; then
+        cp -rf /home/redbot/GenHubCog/GenHub/* "$cog_dir/" 2>/dev/null || true
+    fi
+done
 
 # Start RedBot
 echo "Starting RedBot instance..."
