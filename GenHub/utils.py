@@ -6,28 +6,51 @@ def clean_github_markdown(text: str) -> str:
     if not text:
         return ""
 
-    # 1. Strip HTML comments <!-- ... -->
+    # 1. HTML entities decoding
+    text = text.replace("&quot;", '"').replace("&apos;", "'").replace("&#39;", "'")
+    text = text.replace("&amp;", "&").replace("&lt;", "<").replace("&gt;", ">").replace("&nbsp;", " ")
+
+    # 2. Strip HTML comments <!-- ... -->
     text = re.sub(r"<!--[\s\S]*?-->", "", text)
 
-    # 2. Convert <details><summary>...
+    # 3. Convert <details><summary>...
     text = re.sub(r"<summary>\s*<b>(.*?)</b>\s*</summary>", r"**\1:**", text, flags=re.IGNORECASE)
     text = re.sub(r"<summary>\s*<strong>(.*?)</strong>\s*</summary>", r"**\1:**", text, flags=re.IGNORECASE)
     text = re.sub(r"<summary>\s*(.*?)\s*</summary>", r"**\1:**", text, flags=re.IGNORECASE)
     text = re.sub(r"</?(?:details|summary)[^>]*>", "", text, flags=re.IGNORECASE)
 
-    # 3. HTML formatting to markdown
+    # 4. HTML formatting to markdown
     text = re.sub(r"<b>(.*?)</b>", r"**\1**", text, flags=re.IGNORECASE)
     text = re.sub(r"<strong>(.*?)</strong>", r"**\1**", text, flags=re.IGNORECASE)
     text = re.sub(r"<i>(.*?)</i>", r"*\1*", text, flags=re.IGNORECASE)
     text = re.sub(r"<em>(.*?)</em>", r"*\1*", text, flags=re.IGNORECASE)
+    text = re.sub(r"<sub>(.*?)</sub>", r"*\1*", text, flags=re.IGNORECASE)
+    text = re.sub(r"<sup>(.*?)</sup>", r"*\1*", text, flags=re.IGNORECASE)
     text = re.sub(r"<code>(.*?)</code>", r"`\1`", text, flags=re.IGNORECASE)
+    text = re.sub(r"<kbd>(.*?)</kbd>", r"`\1`", text, flags=re.IGNORECASE)
+    text = re.sub(r"</?(?:del|s|strike)>", "~~", text, flags=re.IGNORECASE)
+    text = re.sub(r"<blockquote>([\s\S]*?)</blockquote>", r"> \1", text, flags=re.IGNORECASE)
     text = re.sub(r"<br\s*/?>", "\n", text, flags=re.IGNORECASE)
     text = re.sub(r"</?p>", "\n", text, flags=re.IGNORECASE)
+    text = re.sub(r'<a\s+[^>]*href=["\'](.*?)["\'][^>]*>(.*?)</a>', r"[\2](\1)", text, flags=re.IGNORECASE)
 
-    # 4. Remove other generic HTML tags
-    text = re.sub(r"<[/]?(?:div|span|section|article|font|center)[^>]*>", "", text, flags=re.IGNORECASE)
+    # 5. Remove any remaining unhandled HTML tags
+    text = re.sub(r"</?[a-zA-Z0-9_-]+(?:\s+[^>]*)?>", "", text)
 
-    # 5. Clean extra whitespace
+    # 6. Convert invalid/pseudo markdown links (e.g. [coderabbitai](coderabbitai) -> `coderabbitai`)
+    text = re.sub(r"\[([^\]]+)\]\((?!(?:https?|mailto):|/|#)([^)]+)\)", r"`\1`", text)
+
+    # 7. Convert GitHub task list checkboxes: [ ] -> ⬜, [x] -> ☑️
+    text = re.sub(r"^\s*[-*]?\s*\[\s*\]\s*", r"⬜ ", text, flags=re.MULTILINE)
+    text = re.sub(r"^\s*[-*]?\s*\[[xX]\]\s*", r"☑️ ", text, flags=re.MULTILINE)
+
+    # 8. Auto-link repository issues/PRs (e.g. community-outpost/GenHub#267) if not already part of a link
+    text = re.sub(r"(?<!\]\()(?<!\[)\b([a-zA-Z0-9_.-]+/[a-zA-Z0-9_.-]+)#(\d+)\b", r"[\1#\2](https://github.com/\1/issues/\2)", text)
+
+    # 9. Clean status suffixes like [merged], [open], [closed] to prevent markdown collision
+    text = re.sub(r"\[(merged|open|closed|draft)\](?!\()", r"(\1)", text, flags=re.IGNORECASE)
+
+    # 10. Clean extra whitespace
     text = re.sub(r"\n{3,}", "\n\n", text)
     return text.strip()
 

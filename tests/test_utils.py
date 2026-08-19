@@ -36,6 +36,18 @@ def test_clean_github_markdown():
     assert "**Summary Title:**" in cleaned
     assert "<details>" not in cleaned
 
+    sample = """
+    <sub>Check the box below or use the [coderabbitai](coderabbitai) plan command.</sub>
+    [ ] Create Plan
+    community-outpost/GenHub#267 - feat: test
+    """
+    clean_sample = clean_github_markdown(sample)
+    assert "<sub>" not in clean_sample
+    assert "*Check the box below" in clean_sample
+    assert "`coderabbitai`" in clean_sample
+    assert "⬜ Create Plan" in clean_sample
+    assert "[community-outpost/GenHub#267](https://github.com/community-outpost/GenHub/issues/267)" in clean_sample
+
 
 def test_create_comment_embed():
     from GenHub.utils import create_comment_embed
