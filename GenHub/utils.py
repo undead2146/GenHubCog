@@ -316,3 +316,45 @@ async def get_or_create_thread(
     thread_cache[key_tuple_int] = thread
     thread_cache[key_tuple_str] = thread
     return thread, True
+
+
+def find_associated_chat_channel(guild, forum_channel, is_pr: bool):
+    """Heuristically discover the accompanying text chat channel for a forum feed."""
+    if not guild or not forum_channel:
+        return None
+
+    category = getattr(forum_channel, "category", None)
+    keywords = (
+        ["pr", "pull-request", "pull_request", "pulls", "prs"]
+        if is_pr
+        else ["issue", "issues", "bugs", "bug", "tickets", "feedback"]
+    )
+
+    # 1. Search text channels inside the SAME category first
+    if category and hasattr(category, "text_channels"):
+        for ch in category.text_channels:
+            name = ch.name.lower().replace("-", "").replace("_", "").replace(" ", "")
+            for kw in keywords:
+                clean_kw = kw.replace("-", "").replace("_", "")
+                if clean_kw in name:
+                    return ch
+
+    # 2. Search all text channels in the guild with "chat" in name
+    if hasattr(guild, "text_channels"):
+        for ch in guild.text_channels:
+            name = ch.name.lower().replace("-", "").replace("_", "").replace(" ", "")
+            for kw in keywords:
+                clean_kw = kw.replace("-", "").replace("_", "")
+                if clean_kw in name and "chat" in name:
+                    return ch
+
+        # 3. Search all text channels in the guild matching keywords
+        for ch in guild.text_channels:
+            name = ch.name.lower().replace("-", "").replace("_", "").replace(" ", "")
+            for kw in keywords:
+                clean_kw = kw.replace("-", "").replace("_", "")
+                if clean_kw in name:
+                    return ch
+
+    return None
+

@@ -1,3 +1,4 @@
+import discord
 from redbot.core import commands
 import os
 
@@ -127,15 +128,29 @@ class ConfigCommands(commands.Cog):
 
         summary = ["✅ **GenHub All-In-One Setup Complete!**", ""]
 
+        from .utils import find_associated_chat_channel
+
         if issues_fid:
             await self.cog.config.issues_forum_id.set(issues_fid)
             summary.append(f"• **Issues Forum:** <#{issues_fid}> (`{issues_fid}`)")
+            if ctx.guild:
+                forum_ch = ctx.guild.get_channel(issues_fid)
+                auto_chat = find_associated_chat_channel(ctx.guild, forum_ch, is_pr=False)
+                if auto_chat:
+                    await self.cog.config.issues_feed_chat_id.set(auto_chat.id)
+                    summary.append(f"  ↳ 🔗 *Auto-linked Issues Chat:* {auto_chat.mention} (`{auto_chat.id}`)")
         else:
             summary.append(f"• **Issues Forum:** ⚠️ Could not resolve `{issues_forum}`")
 
         if prs_fid:
             await self.cog.config.prs_forum_id.set(prs_fid)
             summary.append(f"• **PRs Forum:** <#{prs_fid}> (`{prs_fid}`)")
+            if ctx.guild:
+                forum_ch = ctx.guild.get_channel(prs_fid)
+                auto_chat = find_associated_chat_channel(ctx.guild, forum_ch, is_pr=True)
+                if auto_chat:
+                    await self.cog.config.prs_feed_chat_id.set(auto_chat.id)
+                    summary.append(f"  ↳ 🔗 *Auto-linked PRs Chat:* {auto_chat.mention} (`{auto_chat.id}`)")
         else:
             summary.append(f"• **PRs Forum:** ⚠️ Could not resolve `{prs_forum}`")
 
@@ -207,13 +222,29 @@ class ConfigCommands(commands.Cog):
 
     @genhub.command()
     async def issuesforum(self, ctx, forum_id: int):
-        """Set the Issues forum channel ID."""
+        """Set the Issues forum channel ID (and auto-detect associated chat)."""
         await self._set_config(ctx, "issues_forum_id", forum_id)
+        guild = getattr(ctx, "guild", None)
+        if guild and hasattr(guild, "get_channel"):
+            forum_ch = guild.get_channel(forum_id)
+            from .utils import find_associated_chat_channel
+            auto_chat = find_associated_chat_channel(guild, forum_ch, is_pr=False)
+            if auto_chat:
+                await self.cog.config.issues_feed_chat_id.set(auto_chat.id)
+                await ctx.send(f"🔗 Auto-detected Issues Chat Channel: {auto_chat.mention} (`{auto_chat.id}`)")
 
     @genhub.command()
     async def prsforum(self, ctx, forum_id: int):
-        """Set the Pull Requests forum channel ID."""
+        """Set the Pull Requests forum channel ID (and auto-detect associated chat)."""
         await self._set_config(ctx, "prs_forum_id", forum_id)
+        guild = getattr(ctx, "guild", None)
+        if guild and hasattr(guild, "get_channel"):
+            forum_ch = guild.get_channel(forum_id)
+            from .utils import find_associated_chat_channel
+            auto_chat = find_associated_chat_channel(guild, forum_ch, is_pr=True)
+            if auto_chat:
+                await self.cog.config.prs_feed_chat_id.set(auto_chat.id)
+                await ctx.send(f"🔗 Auto-detected PRs Chat Channel: {auto_chat.mention} (`{auto_chat.id}`)")
 
     @genhub.command()
     async def issuesfeedchat(self, ctx, channel_id: int):
@@ -224,6 +255,223 @@ class ConfigCommands(commands.Cog):
     async def prsfeedchat(self, ctx, channel_id: int):
         """Set the PR Feed Chat channel ID."""
         await self._set_config(ctx, "prs_feed_chat_id", channel_id)
+
+    @genhub.command(aliases=["openprs", "pulls", "prs"])
+    async def openpullrequests(self, ctx, repo: str = None):
+        """Display all open Pull Requests in an interactive paginated embed."""
+        import aiohttp
+        from .views import PaginatedEmbedView
+
+        allowed_repos = await self.cog.config.allowed_repos()
+        if not repo:
+            if not allowed_repos:
+                await ctx.send("❌ No repository configured. Use `!genhub addrepo <owner/repo>` first.")
+                return
+            repo = allowed_repos[0]
+
+        token = await self.cog.config.github_token()
+        headers = {"Accept": "application/vnd.github.v3+json"}
+        if token:
+            headers["Authorization"] = f"token {token}"
+
+        loading = await ctx.send(f"🔍 Fetching open pull requests for `{repo}`...")
+
+        url = f"https://api.github.com/repos/{repo}/pulls?state=open&per_page=100&sort=created&direction=desc"
+        prs = []
+        try:
+            async with aiohttp.ClientSession(headers=headers) as session:
+                async with session.get(url, timeout=10) as resp:
+                    if resp.status == 200:
+                        prs = await resp.json()
+                    elif resp.status == 404:
+                        await loading.edit(content=f"❌ Repository `{repo}` not found.")
+                        return
+                    else:
+                        await loading.edit(content=f"⚠️ GitHub API returned HTTP {resp.status}")
+                        return
+        except Exception as e:
+            await loading.edit(content=f"❌ Failed to fetch pull requests: {e}")
+            return
+
+        if not prs:
+            await loading.edit(content=f"🎉 No open pull requests found for `{repo}`!")
+            return
+
+        page_size = 8
+        pages = []
+        total_prs = len(prs)
+        total_pages = (total_prs + page_size - 1) // page_size
+        prs_forum_id = await self.cog.config.prs_forum_id()
+
+        for page_idx in range(total_pages):
+            chunk = prs[page_idx * page_size : (page_idx + 1) * page_size]
+            embed = discord.Embed(
+                title=f"🔀 Open Pull Requests for {repo} ({total_prs})",
+                color=0x23A55A,
+                description=f"Showing page **{page_idx + 1}** of **{total_pages}** • Total Open PRs: **{total_prs}**\n\n",
+            )
+            for pr in chunk:
+                num = pr["number"]
+                title = pr["title"][:70]
+                pr_url = pr["html_url"]
+                author = pr.get("user", {}).get("login", "unknown")
+                thread_key = (prs_forum_id, repo, num)
+                thread = self.cog.thread_cache.get(thread_key)
+                thread_link = f" • <#{thread.id}>" if thread else ""
+                embed.description += f"• [**#{num}**]({pr_url}) {title}{thread_link}\n  ↳ By **{author}**\n"
+
+            embed.set_footer(text=f"GenHub PR Browser • Page {page_idx + 1}/{total_pages}")
+            pages.append(embed)
+
+        view = PaginatedEmbedView(pages, ctx.author.id) if len(pages) > 1 else None
+        await loading.delete()
+        await ctx.send(embed=pages[0], view=view)
+
+    @genhub.command(aliases=["openissues", "issues"])
+    async def openissues_cmd(self, ctx, repo: str = None):
+        """Display all open Issues in an interactive paginated embed."""
+        import aiohttp
+        from .views import PaginatedEmbedView
+
+        allowed_repos = await self.cog.config.allowed_repos()
+        if not repo:
+            if not allowed_repos:
+                await ctx.send("❌ No repository configured. Use `!genhub addrepo <owner/repo>` first.")
+                return
+            repo = allowed_repos[0]
+
+        token = await self.cog.config.github_token()
+        headers = {"Accept": "application/vnd.github.v3+json"}
+        if token:
+            headers["Authorization"] = f"token {token}"
+
+        loading = await ctx.send(f"🔍 Fetching open issues for `{repo}`...")
+
+        url = f"https://api.github.com/repos/{repo}/issues?state=open&per_page=100&sort=created&direction=desc"
+        issues = []
+        try:
+            async with aiohttp.ClientSession(headers=headers) as session:
+                async with session.get(url, timeout=10) as resp:
+                    if resp.status == 200:
+                        raw_items = await resp.json()
+                        issues = [it for it in raw_items if "pull_request" not in it]
+                    elif resp.status == 404:
+                        await loading.edit(content=f"❌ Repository `{repo}` not found.")
+                        return
+                    else:
+                        await loading.edit(content=f"⚠️ GitHub API returned HTTP {resp.status}")
+                        return
+        except Exception as e:
+            await loading.edit(content=f"❌ Failed to fetch issues: {e}")
+            return
+
+        if not issues:
+            await loading.edit(content=f"🎉 No open issues found for `{repo}`!")
+            return
+
+        page_size = 10
+        pages = []
+        total_issues = len(issues)
+        total_pages = (total_issues + page_size - 1) // page_size
+        issues_forum_id = await self.cog.config.issues_forum_id()
+
+        for page_idx in range(total_pages):
+            chunk = issues[page_idx * page_size : (page_idx + 1) * page_size]
+            embed = discord.Embed(
+                title=f"🐛 Open Issues for {repo} ({total_issues})",
+                color=0x5865F2,
+                description=f"Showing page **{page_idx + 1}** of **{total_pages}** • Total Open Issues: **{total_issues}**\n\n",
+            )
+            for issue in chunk:
+                num = issue["number"]
+                title = issue["title"][:70]
+                issue_url = issue["html_url"]
+                author = issue.get("user", {}).get("login", "unknown")
+                thread_key = (issues_forum_id, repo, num)
+                thread = self.cog.thread_cache.get(thread_key)
+                thread_link = f" • <#{thread.id}>" if thread else ""
+                embed.description += f"• [**#{num}**]({issue_url}) {title}{thread_link}\n  ↳ By **{author}**\n"
+
+            embed.set_footer(text=f"GenHub Issue Browser • Page {page_idx + 1}/{total_pages}")
+            pages.append(embed)
+
+        view = PaginatedEmbedView(pages, ctx.author.id) if len(pages) > 1 else None
+        await loading.delete()
+        await ctx.send(embed=pages[0], view=view)
+
+    @genhub.command(aliases=["overview", "digest"])
+    async def summary(self, ctx, repo: str = None):
+        """Display an executive compact summary embed of open PRs and issues."""
+        import aiohttp
+
+        allowed_repos = await self.cog.config.allowed_repos()
+        if not repo:
+            if not allowed_repos:
+                await ctx.send("❌ No repository configured. Use `!genhub addrepo <owner/repo>` first.")
+                return
+            repo = allowed_repos[0]
+
+        token = await self.cog.config.github_token()
+        headers = {"Accept": "application/vnd.github.v3+json"}
+        if token:
+            headers["Authorization"] = f"token {token}"
+
+        loading = await ctx.send(f"📊 Generating summary for `{repo}`...")
+
+        try:
+            async with aiohttp.ClientSession(headers=headers) as session:
+                prs_resp = await session.get(f"https://api.github.com/repos/{repo}/pulls?state=open&per_page=100")
+                prs = await prs_resp.json() if prs_resp.status == 200 else []
+
+                issues_resp = await session.get(f"https://api.github.com/repos/{repo}/issues?state=open&per_page=100")
+                raw_issues = await issues_resp.json() if issues_resp.status == 200 else []
+                issues = [it for it in raw_issues if "pull_request" not in it]
+
+                repo_resp = await session.get(f"https://api.github.com/repos/{repo}")
+                repo_info = await repo_resp.json() if repo_resp.status == 200 else {}
+        except Exception as e:
+            await loading.edit(content=f"❌ Failed to fetch summary: {e}")
+            return
+
+        embed = discord.Embed(
+            title=f"📊 {repo} • Activity & Backlog Summary",
+            url=f"https://github.com/{repo}",
+            color=0x5865F2,
+            description=repo_info.get("description", "GitHub Repository Integration")[:200] if repo_info else "Repository Overview",
+        )
+
+        issues_forum_id = await self.cog.config.issues_forum_id()
+        prs_forum_id = await self.cog.config.prs_forum_id()
+
+        # PRs Field
+        prs_text = f"**Total Open:** `{len(prs)}`\n"
+        if prs_forum_id:
+            prs_text += f"**Forum Feed:** <#{prs_forum_id}>\n"
+        prs_text += "\n**Recent Open PRs:**\n"
+        if prs:
+            for p in prs[:4]:
+                prs_text += f"• [#{p['number']}]({p['html_url']}) {p['title'][:35]} (by {p['user']['login']})\n"
+        else:
+            prs_text += "• *No open pull requests*\n"
+
+        embed.add_field(name=f"🔀 Pull Requests ({len(prs)})", value=prs_text, inline=True)
+
+        # Issues Field
+        issues_text = f"**Total Open:** `{len(issues)}`\n"
+        if issues_forum_id:
+            issues_text += f"**Forum Feed:** <#{issues_forum_id}>\n"
+        issues_text += "\n**Recent Issues:**\n"
+        if issues:
+            for it in issues[:4]:
+                issues_text += f"• [#{it['number']}]({it['html_url']}) {it['title'][:35]} (by {it['user']['login']})\n"
+        else:
+            issues_text += "• *No open issues*\n"
+
+        embed.add_field(name=f"🐛 Issues ({len(issues)})", value=issues_text, inline=True)
+
+        embed.set_footer(text="Use !genhub openprs or !genhub openissues to browse all items")
+        await loading.delete()
+        await ctx.send(embed=embed)
 
     @genhub.command()
     async def contributorrole(self, ctx, role_id: int):

@@ -61,6 +61,21 @@ class GitHubEventHandlers:
         self.pending_reviews = {}
         self.rate_limiter = RateLimiter()
 
+    async def _get_config_id(self, key):
+        """Safely fetch a channel/role ID from cog config without crashing on Mock objects."""
+        if not hasattr(self.cog, "config") or not hasattr(self.cog.config, key):
+            return None
+        attr = getattr(self.cog.config, key)
+        try:
+            val = attr()
+            if asyncio.iscoroutine(val):
+                return await val
+            if isinstance(val, int):
+                return val
+            return None
+        except Exception:
+            return None
+
     async def log_error(self, message: str):
         """Log errors to console and optionally to a Discord log channel."""
         print(f"❌ GenHub Error: {message}")
@@ -249,6 +264,23 @@ class GitHubEventHandlers:
                 f"👤 **Issue {action}:** {assignee_text}\n🔧 Updated by: **{author}**",
             )
 
+        # Send concise overview notification to Issues Feed Chat channel (if configured)
+        issues_chat_id = await self._get_config_id("issues_feed_chat_id")
+        if issues_chat_id:
+            chat_ch = self.cog.bot.get_channel(issues_chat_id)
+            if chat_ch:
+                thread_ref = f"<#{thread.id}>" if thread else ""
+                thread_suffix = f" • Thread: {thread_ref}" if thread_ref else ""
+                try:
+                    if action == "opened":
+                        await chat_ch.send(f"🆕 **Issue Created:** [#{number} {title}]({url}){thread_suffix} • By **{author}**")
+                    elif action == "closed":
+                        await chat_ch.send(f"❌ **Issue Closed:** [#{number} {title}]({url}){thread_suffix} • By **{author}**")
+                    elif action == "reopened":
+                        await chat_ch.send(f"🔄 **Issue Reopened:** [#{number} {title}]({url}){thread_suffix} • By **{author}**")
+                except Exception as e:
+                    print(f"⚠️ Failed to send issue chat notification: {e}")
+
     async def handle_pull_request(self, data, repo_full_name):
         pr = data["pull_request"]
         number, title, url, author, action = (
@@ -298,6 +330,26 @@ class GitHubEventHandlers:
             assignee = pr.get("assignee")
             assignee_text = f"[{assignee['login']}]({assignee['html_url']})" if assignee else "Unknown"
             await send_message(thread, f"👤 **PR {action}:** {assignee_text}\n🔧 Updated by: **{author}**")
+
+        # Send concise overview notification to PRs Feed Chat channel (if configured)
+        prs_chat_id = await self._get_config_id("prs_feed_chat_id")
+        if prs_chat_id:
+            chat_ch = self.cog.bot.get_channel(prs_chat_id)
+            if chat_ch:
+                thread_ref = f"<#{thread.id}>" if thread else ""
+                thread_suffix = f" • Thread: {thread_ref}" if thread_ref else ""
+                try:
+                    if action == "opened":
+                        await chat_ch.send(f"🆕 **PR Opened:** [#{number} {title}]({url}){thread_suffix} • By **{author}** {role_mention}".strip())
+                    elif action == "closed":
+                        if pr.get("merged") or pr.get("merged_at"):
+                            await chat_ch.send(f"🟣 **PR Merged:** [#{number} {title}]({url}){thread_suffix} • By **{author}** {role_mention}".strip())
+                        else:
+                            await chat_ch.send(f"❌ **PR Closed (Unmerged):** [#{number} {title}]({url}){thread_suffix} • By **{author}**")
+                    elif action == "reopened":
+                        await chat_ch.send(f"🔄 **PR Reopened:** [#{number} {title}]({url}){thread_suffix} • By **{author}**")
+                except Exception as e:
+                    print(f"⚠️ Failed to send PR chat notification: {e}")
 
     async def handle_issue_comment(self, data, repo_full_name):
         issue = data["issue"]

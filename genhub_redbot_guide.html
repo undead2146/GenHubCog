@@ -481,6 +481,61 @@
       transform: translateY(-1px);
     }
 
+    /* Dual Feed Visual Cards */
+    .dual-feed-card {
+      background: #111319;
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius);
+      padding: 20px;
+    }
+
+    .dual-feed-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+    }
+
+    .dual-tag {
+      font-size: 11px;
+      font-weight: 700;
+      padding: 3px 8px;
+      border-radius: 4px;
+      text-transform: uppercase;
+    }
+
+    .tag-forum { background: rgba(88, 101, 242, 0.2); color: #5865f2; }
+    .tag-chat { background: rgba(35, 165, 90, 0.2); color: #23a55a; }
+
+    /* Interactive Paginated Mockup */
+    .paginated-preview {
+      background: #2b2d31;
+      border-radius: 8px;
+      padding: 18px 20px;
+      margin-top: 14px;
+    }
+
+    .paginated-controls {
+      display: flex;
+      gap: 10px;
+      margin-top: 14px;
+    }
+
+    .p-btn {
+      background: #383a40;
+      color: #fff;
+      border: none;
+      padding: 6px 14px;
+      border-radius: 4px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .p-btn.active {
+      background: var(--accent-primary);
+    }
+
     /* Discord Mockup Container */
     .discord-mockup {
       background: #1e1f22;
@@ -810,7 +865,8 @@
     <ul class="nav-links">
       <li><a href="#quick-install" class="nav-link active"><span>⚡</span> 3-Step Discord Install</a></li>
       <li><a href="#all-in-one-setup" class="nav-link"><span>🎯</span> 1-Line Setup Generator</a></li>
-      <li><a href="#channel-config" class="nav-link"><span>🛠️</span> Individual Channel Setup</a></li>
+      <li><a href="#dual-feed" class="nav-link"><span>📡</span> Dual-Feed Architecture</a></li>
+      <li><a href="#backlog-browser" class="nav-link"><span>📊</span> Backlog Browser</a></li>
       <li><a href="#in-discord-diag" class="nav-link"><span>🔍</span> Diagnostics & Status</a></li>
       <li><a href="#updating-cog" class="nav-link"><span>🔄</span> Updating via Discord</a></li>
     </ul>
@@ -901,10 +957,10 @@
     <!-- Interactive 1-Line Setup Generator -->
     <section id="all-in-one-setup">
       <div class="section-header">
-        <h3>🎯 All-In-One Setup Command Generator</h3>
+        <h3>🎯 All-In-One Setup Command Generator (with Auto-Chat Detection)</h3>
       </div>
       <p class="section-desc">
-        Instead of running 6 separate commands, you can configure all your channels, roles, and repositories in <strong>ONE single command</strong>. Fill in the fields below to generate your custom command:
+        When you link a forum channel, GenHub <strong>heuristically discovers and links</strong> the accompanying text chat channel (e.g. <code>issues-chat</code> / <code>pull-requests-chat</code>). Fill in your details below to generate your custom setup command:
       </p>
 
       <div class="generator-card">
@@ -918,7 +974,7 @@
             <input type="text" id="genPrs" value="#pull-requests-feed" placeholder="#pull-requests-feed">
           </div>
           <div class="input-group">
-            <label>3. Log/Chat Channel (# or ID)</label>
+            <label>3. Log Channel (# or ID)</label>
             <input type="text" id="genLog" value="#genhub-chat" placeholder="#genhub-chat">
           </div>
           <div class="input-group">
@@ -944,7 +1000,7 @@
         <div class="card">
           <div class="card-title"><span>🧙</span> Method B: Interactive Wizard in Discord</div>
           <p>
-            You can also just type <code class="cmd">!genhub setup</code> with <strong>no arguments</strong>. The bot will guide you step-by-step in chat and ask for each channel!
+            Type <code class="cmd">!genhub setup</code> with <strong>no arguments</strong>. The bot will guide you step-by-step in chat and automatically detect associated chat channels!
           </p>
           <div class="code-block" data-copy="!genhub setup">
             <span>!genhub setup</span>
@@ -965,54 +1021,107 @@
       </div>
     </section>
 
-    <!-- Individual Channel Setup (Alternative) -->
-    <section id="channel-config">
+    <!-- Dual-Feed Routing Architecture -->
+    <section id="dual-feed">
       <div class="section-header">
-        <h3>🛠️ Individual Channel Commands (Alternative)</h3>
+        <h3>📡 Dual-Feed Routing Architecture</h3>
       </div>
       <p class="section-desc">
-        If you prefer setting channels individually or need to change a single setting later:
+        How GenHub Cog separates deep discussions from high-level channel notifications to keep your community clean and organized:
       </p>
 
       <div class="grid-2">
-        <div class="card">
-          <div class="card-title"><span>📁</span> Forum Channels</div>
-          <div class="code-block" data-copy="!genhub issuesforum ">
-            <span>!genhub issuesforum &lt;issues_forum_id&gt;</span>
-            <span class="copy-hint">📋 Copy</span>
+        <div class="dual-feed-card">
+          <div class="dual-feed-header">
+            <h4 style="color:#fff;">📁 Forum Feeds (The Workspace)</h4>
+            <span class="dual-tag tag-forum">Forum Channels</span>
           </div>
-          <div class="code-block" data-copy="!genhub prsforum ">
-            <span>!genhub prsforum &lt;prs_forum_id&gt;</span>
+          <p style="font-size:13px; color:var(--text-muted); margin-bottom:12px;">
+            Target: <code>github-issues-feed</code> & <code>pull-requests-feed</code>
+          </p>
+          <ul style="font-size:13px; color:#dbdee1; line-height:1.7; padding-left:18px;">
+            <li>Creates a dedicated post/thread for every PR or Issue: <code>[GH] [#104] Title</code></li>
+            <li>Contains full descriptions, labels, and status tags (<code>Open</code>, <code>Merged</code>, <code>Closed</code>)</li>
+            <li>Forwards all deep comment discussions, review comments, and code diff notes inside the thread</li>
+          </ul>
+        </div>
+
+        <div class="dual-feed-card">
+          <div class="dual-feed-header">
+            <h4 style="color:#fff;">💬 Chat Channels (The Birds-Eye View)</h4>
+            <span class="dual-tag tag-chat">Text Channels</span>
+          </div>
+          <p style="font-size:13px; color:var(--text-muted); margin-bottom:12px;">
+            Target: <code>issues-chat</code> & <code>pull-requests-chat</code>
+          </p>
+          <ul style="font-size:13px; color:#dbdee1; line-height:1.7; padding-left:18px;">
+            <li>High-level status alerts only: PR opened, PR merged, PR closed, Issue opened/closed</li>
+            <li>Includes clickable links to the Forum Thread and the GitHub URL</li>
+            <li>Role mention (<code>@Contributor</code>) pings only on New PRs and Merges</li>
+            <li><strong>Zero comment spam</strong>: comments stay in the thread!</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- Backlog & Activity Browser (110 Issues / 19 PRs) -->
+    <section id="backlog-browser">
+      <div class="section-header">
+        <h3>📊 Backlog & Activity Browser (Zero Chat Flood)</h3>
+      </div>
+      <p class="section-desc">
+        How to inspect 110 open issues and 19 open pull requests in Discord without flooding chat messages:
+      </p>
+
+      <div class="grid-3">
+        <div class="card">
+          <div class="card-title"><span>🔀</span> 1. Interactive PR Browser</div>
+          <p>Browse all open PRs in 8-item pages with interactive Prev/Next buttons:</p>
+          <div class="code-block" data-copy="!genhub openprs">
+            <span>!genhub openprs</span>
             <span class="copy-hint">📋 Copy</span>
           </div>
         </div>
 
         <div class="card">
-          <div class="card-title"><span>🔔</span> Log Channel & Role</div>
-          <div class="code-block" data-copy="!genhub logchannel ">
-            <span>!genhub logchannel &lt;log_channel_id&gt;</span>
-            <span class="copy-hint">📋 Copy</span>
-          </div>
-          <div class="code-block" data-copy="!genhub contributorrole ">
-            <span>!genhub contributorrole &lt;role_id&gt;</span>
+          <div class="card-title"><span>🐛</span> 2. Interactive Issue Browser</div>
+          <p>Browse all open issues in 10-item pages with clickable thread links:</p>
+          <div class="code-block" data-copy="!genhub openissues">
+            <span>!genhub openissues</span>
             <span class="copy-hint">📋 Copy</span>
           </div>
         </div>
 
         <div class="card">
-          <div class="card-title"><span>🐙</span> Tracked Repositories</div>
-          <div class="code-block" data-copy="!genhub addrepo community-outpost/GenHub">
-            <span>!genhub addrepo community-outpost/GenHub</span>
+          <div class="card-title"><span>📈</span> 3. Executive Backlog Summary</div>
+          <p>Posts a single, compact summary card with total counts and top items:</p>
+          <div class="code-block" data-copy="!genhub summary">
+            <span>!genhub summary</span>
             <span class="copy-hint">📋 Copy</span>
           </div>
         </div>
+      </div>
 
-        <div class="card">
-          <div class="card-title"><span>🔑</span> GitHub API Token</div>
-          <div class="code-block" data-copy="!genhub token ">
-            <span>!genhub token &lt;github_pat_token&gt;</span>
-            <span class="copy-hint">📋 Copy</span>
-          </div>
+      <!-- Paginated Interactive Preview -->
+      <div class="paginated-preview">
+        <div style="font-weight:700; color:#fff; font-size:14px; margin-bottom:8px;">
+          🔀 Open Pull Requests for community-outpost/GenHub (19)
+        </div>
+        <div style="font-size:12.5px; color:#949ba4; margin-bottom:12px;">
+          Showing page <strong>1</strong> of <strong>3</strong> • Total Open PRs: <strong>19</strong>
+        </div>
+        <div style="font-size:13px; color:#dbdee1; line-height:1.8;">
+          • [<strong>#104</strong>] Launcher Direct-Connect Zero Hour Patch • &lt;#1440047437506023445&gt;<br>
+          &nbsp;&nbsp;↳ By <strong>undead2146</strong><br>
+          • [<strong>#103</strong>] Fix Map Downloader Socket Timeout • &lt;#1440047437506023446&gt;<br>
+          &nbsp;&nbsp;↳ By <strong>community_dev</strong><br>
+          • [<strong>#98</strong>] Add Zero Hour Community Map Pack 4 • &lt;#1440047437506023447&gt;<br>
+          &nbsp;&nbsp;↳ By <strong>modder_alpha</strong><br>
+        </div>
+        <div class="paginated-controls">
+          <button class="p-btn" disabled>◀️ Previous</button>
+          <button class="p-btn active">Page 1 / 3</button>
+          <button class="p-btn">Next ▶️</button>
         </div>
       </div>
     </section>
@@ -1044,7 +1153,9 @@
           • Endpoints: <code>/github</code>, <code>/webhook</code>, <code>/health</code><br><br>
           <strong>3. Discord Channels & Permissions:</strong><br>
           • Issues Forum: <code>github-issues-feed</code> (1411476531024498740) → <span class="diag-ok">✅ Active & Permitted</span><br>
+          • Issues Chat: <code>issues-chat</code> (1411476532000000000) → <span class="diag-ok">✅ Active</span><br>
           • PRs Forum: <code>pull-requests-feed</code> (1440047437506023445) → <span class="diag-ok">✅ Active & Permitted</span><br>
+          • PRs Chat: <code>pull-requests-chat</code> (1440047438000000000) → <span class="diag-ok">✅ Active</span><br>
           • Log Channel: <code>genhub-chat</code> (1401769761666371734) → <span class="diag-ok">✅ Active</span><br><br>
           <strong>4. GitHub API & Rate Limits:</strong><br>
           • Token Status: <span class="diag-ok">✅ Valid & Authenticated</span><br>
@@ -1123,8 +1234,26 @@
               <tr>
                 <td><code class="cmd">!genhub setup</code></td>
                 <td><code>[#issues] [#prs] [#log] [@role] [repo]</code></td>
-                <td>All-in-one setup command to configure everything in 1 step or launch the wizard</td>
+                <td>All-in-one setup command with automatic chat channel discovery</td>
                 <td><button class="copy-btn" data-copy="!genhub setup">📋 Copy</button></td>
+              </tr>
+              <tr>
+                <td><code class="cmd">!genhub openprs</code></td>
+                <td><code>[repo]</code></td>
+                <td>Interactive paginated browser of all open Pull Requests (Prev/Next buttons)</td>
+                <td><button class="copy-btn" data-copy="!genhub openprs">📋 Copy</button></td>
+              </tr>
+              <tr>
+                <td><code class="cmd">!genhub openissues</code></td>
+                <td><code>[repo]</code></td>
+                <td>Interactive paginated browser of all open Issues (Prev/Next buttons)</td>
+                <td><button class="copy-btn" data-copy="!genhub openissues">📋 Copy</button></td>
+              </tr>
+              <tr>
+                <td><code class="cmd">!genhub summary</code></td>
+                <td><code>[repo]</code></td>
+                <td>Posts a compact executive backlog digest embed in the chat channel</td>
+                <td><button class="copy-btn" data-copy="!genhub summary">📋 Copy</button></td>
               </tr>
               <tr>
                 <td><code class="cmd">!genhub diag</code></td>
@@ -1165,13 +1294,13 @@
               <tr>
                 <td><code class="cmd">!genhub issuesforum</code></td>
                 <td><code>&lt;forum_id&gt;</code></td>
-                <td>Sets the Forum channel ID for GitHub Issues</td>
+                <td>Sets the Forum channel ID for GitHub Issues (auto-links chat)</td>
                 <td><button class="copy-btn" data-copy="!genhub issuesforum ">📋 Copy</button></td>
               </tr>
               <tr>
                 <td><code class="cmd">!genhub prsforum</code></td>
                 <td><code>&lt;forum_id&gt;</code></td>
-                <td>Sets the Forum channel ID for Pull Requests</td>
+                <td>Sets the Forum channel ID for Pull Requests (auto-links chat)</td>
                 <td><button class="copy-btn" data-copy="!genhub prsforum ">📋 Copy</button></td>
               </tr>
               <tr>
