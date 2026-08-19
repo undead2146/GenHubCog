@@ -162,26 +162,45 @@ class GitHubEventHandlers:
             
             page += 1
         
-        # Fetch PR review comments if it's a PR
+        # Fetch PR review comments and top-level reviews if it's a PR
         if is_pr:
+            # 1. PR inline diff review comments
             page = 1
             while page <= 10:
                 url = f"https://api.github.com/repos/{repo}/pulls/{number}/comments?per_page=100&page={page}"
                 status, data = await self._make_github_request(session, url)
-                
+
                 if status != 200 or not data:
                     break
-                
-                # Add a flag to distinguish review comments
+
                 for comment in data:
                     comment['is_review_comment'] = True
                 comments.extend(data)
-                
+
                 if len(data) < 100:
                     break
-                
                 page += 1
-        
+
+            # 2. PR top-level review submissions (e.g. CodeRabbit summary / approval bodies)
+            page = 1
+            while page <= 5:
+                url = f"https://api.github.com/repos/{repo}/pulls/{number}/reviews?per_page=100&page={page}"
+                status, data = await self._make_github_request(session, url)
+
+                if status != 200 or not data:
+                    break
+
+                for rev in data:
+                    body = rev.get("body")
+                    if body and body.strip():
+                        rev["is_review_comment"] = True
+                        rev["created_at"] = rev.get("submitted_at") or rev.get("created_at")
+                        comments.append(rev)
+
+                if len(data) < 100:
+                    break
+                page += 1
+
         # Sort by creation date
         comments.sort(key=lambda c: c.get('created_at', ''))
         return comments
@@ -664,14 +683,15 @@ class GitHubEventHandlers:
                 print(f"⚠️ Could not update tags for #{number}: {e}")
 
         # Check if item has any comments before making API requests
-        comment_count = item.get("comments", 0)
-        if is_pr:
-            comment_count += item.get("review_comments", 0)
+        # Note: GitHub issues endpoint returns 'comments' count, but pulls list endpoint does not.
+        should_fetch_comments = True
+        if not is_pr and item.get("comments") is not None and item.get("comments") == 0:
+            should_fetch_comments = False
 
-        if comment_count > 0 and not self.reconcile_cancelled:
+        if should_fetch_comments and not self.reconcile_cancelled:
             # Fetch and post comments with bot spam protection
             try:
-                print(f"📥 Fetching {comment_count} comments for {repo}#{number}...")
+                print(f"📥 Fetching comments and reviews for {repo}#{number}...")
                 comments = await self._fetch_comments(session, repo, number, is_pr)
 
                 if comments and not self.reconcile_cancelled:
