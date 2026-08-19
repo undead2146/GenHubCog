@@ -276,19 +276,27 @@ class ConfigCommands(commands.Cog):
 
         loading = await ctx.send(f"🔍 Fetching open pull requests for `{repo}`...")
 
-        url = f"https://api.github.com/repos/{repo}/pulls?state=open&per_page=100&sort=created&direction=desc"
         prs = []
+        page = 1
         try:
             async with aiohttp.ClientSession(headers=headers) as session:
-                async with session.get(url, timeout=10) as resp:
-                    if resp.status == 200:
-                        prs = await resp.json()
-                    elif resp.status == 404:
-                        await loading.edit(content=f"❌ Repository `{repo}` not found.")
-                        return
-                    else:
-                        await loading.edit(content=f"⚠️ GitHub API returned HTTP {resp.status}")
-                        return
+                while page <= 10:
+                    url = f"https://api.github.com/repos/{repo}/pulls?state=open&per_page=100&page={page}"
+                    async with session.get(url, timeout=10) as resp:
+                        if resp.status == 200:
+                            data = await resp.json()
+                            if not data:
+                                break
+                            prs.extend(data)
+                            if len(data) < 100:
+                                break
+                            page += 1
+                        elif resp.status == 404:
+                            await loading.edit(content=f"❌ Repository `{repo}` not found.")
+                            return
+                        else:
+                            await loading.edit(content=f"⚠️ GitHub API returned HTTP {resp.status}")
+                            return
         except Exception as e:
             await loading.edit(content=f"❌ Failed to fetch pull requests: {e}")
             return
@@ -347,20 +355,28 @@ class ConfigCommands(commands.Cog):
 
         loading = await ctx.send(f"🔍 Fetching open issues for `{repo}`...")
 
-        url = f"https://api.github.com/repos/{repo}/issues?state=open&per_page=100&sort=created&direction=desc"
         issues = []
+        page = 1
         try:
             async with aiohttp.ClientSession(headers=headers) as session:
-                async with session.get(url, timeout=10) as resp:
-                    if resp.status == 200:
-                        raw_items = await resp.json()
-                        issues = [it for it in raw_items if "pull_request" not in it]
-                    elif resp.status == 404:
-                        await loading.edit(content=f"❌ Repository `{repo}` not found.")
-                        return
-                    else:
-                        await loading.edit(content=f"⚠️ GitHub API returned HTTP {resp.status}")
-                        return
+                while page <= 10:
+                    url = f"https://api.github.com/repos/{repo}/issues?state=open&per_page=100&page={page}"
+                    async with session.get(url, timeout=10) as resp:
+                        if resp.status == 200:
+                            raw_items = await resp.json()
+                            if not raw_items:
+                                break
+                            pure_items = [it for it in raw_items if "pull_request" not in it]
+                            issues.extend(pure_items)
+                            if len(raw_items) < 100:
+                                break
+                            page += 1
+                        elif resp.status == 404:
+                            await loading.edit(content=f"❌ Repository `{repo}` not found.")
+                            return
+                        else:
+                            await loading.edit(content=f"⚠️ GitHub API returned HTTP {resp.status}")
+                            return
         except Exception as e:
             await loading.edit(content=f"❌ Failed to fetch issues: {e}")
             return
@@ -420,13 +436,40 @@ class ConfigCommands(commands.Cog):
 
         try:
             async with aiohttp.ClientSession(headers=headers) as session:
-                prs_resp = await session.get(f"https://api.github.com/repos/{repo}/pulls?state=open&per_page=100")
-                prs = await prs_resp.json() if prs_resp.status == 200 else []
+                # 1. Fetch PRs across pages
+                prs = []
+                p_page = 1
+                while p_page <= 10:
+                    prs_resp = await session.get(f"https://api.github.com/repos/{repo}/pulls?state=open&per_page=100&page={p_page}")
+                    if prs_resp.status == 200:
+                        p_data = await prs_resp.json()
+                        if not p_data:
+                            break
+                        prs.extend(p_data)
+                        if len(p_data) < 100:
+                            break
+                        p_page += 1
+                    else:
+                        break
 
-                issues_resp = await session.get(f"https://api.github.com/repos/{repo}/issues?state=open&per_page=100")
-                raw_issues = await issues_resp.json() if issues_resp.status == 200 else []
-                issues = [it for it in raw_issues if "pull_request" not in it]
+                # 2. Fetch Issues across pages
+                issues = []
+                i_page = 1
+                while i_page <= 10:
+                    issues_resp = await session.get(f"https://api.github.com/repos/{repo}/issues?state=open&per_page=100&page={i_page}")
+                    if issues_resp.status == 200:
+                        raw_data = await issues_resp.json()
+                        if not raw_data:
+                            break
+                        pure_data = [it for it in raw_data if "pull_request" not in it]
+                        issues.extend(pure_data)
+                        if len(raw_data) < 100:
+                            break
+                        i_page += 1
+                    else:
+                        break
 
+                # 3. Fetch Repo Info
                 repo_resp = await session.get(f"https://api.github.com/repos/{repo}")
                 repo_info = await repo_resp.json() if repo_resp.status == 200 else {}
         except Exception as e:
