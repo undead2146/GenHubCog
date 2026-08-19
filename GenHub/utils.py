@@ -177,13 +177,16 @@ async def get_or_create_tag(forum, name):
 
 async def get_issue_tags(forum, issue):
     tags = []
-    if issue["state"] == "open":
+    if not forum:
+        return tags
+    state = issue.get("state", "open")
+    if str(state).lower() == "open":
         tag = await get_or_create_tag(forum, "Open")
     else:
         tag = await get_or_create_tag(forum, "Closed")
     if tag:
         tags.append(tag)
-    if issue.get("assignees"):
+    if issue.get("assignees") or issue.get("assignee"):
         active_tag = await get_or_create_tag(forum, "Active")
         if active_tag:
             tags.append(active_tag)
@@ -192,7 +195,10 @@ async def get_issue_tags(forum, issue):
 
 async def get_pr_tags(forum, pr):
     tags = []
-    if pr.get("state") == "open":
+    if not forum:
+        return tags
+    state = pr.get("state", "open")
+    if str(state).lower() == "open":
         tag = await get_or_create_tag(forum, "Open")
     elif pr.get("merged") or pr.get("merged_at") or (
         "pull_request" in pr and pr["pull_request"].get("merged_at")
@@ -202,6 +208,10 @@ async def get_pr_tags(forum, pr):
         tag = await get_or_create_tag(forum, "Closed")
     if tag:
         tags.append(tag)
+    if pr.get("assignees") or pr.get("assignee"):
+        active_tag = await get_or_create_tag(forum, "Active")
+        if active_tag:
+            tags.append(active_tag)
     return tags
 
 
