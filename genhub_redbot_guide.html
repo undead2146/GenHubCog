@@ -986,13 +986,17 @@
             <label>5. GitHub Repository (owner/repo)</label>
             <input type="text" id="genRepo" value="community-outpost/GenHub" placeholder="community-outpost/GenHub">
           </div>
+          <div class="input-group">
+            <label>6. Pinned Updates (# or ID)</label>
+            <input type="text" id="genUpdates" value="#pinned-updates" placeholder="#pinned-updates">
+          </div>
         </div>
 
         <div style="margin-bottom: 8px; font-size: 12px; color: #dbdee1; font-weight: 600;">
           Generated Setup Command:
         </div>
         <div class="generated-box">
-          <div class="generated-text" id="generatedCmd">!genhub setup #github-issues-feed #pull-requests-feed #genhub-chat @Contributor community-outpost/GenHub</div>
+          <div class="generated-text" id="generatedCmd">!genhub setup #github-issues-feed #pull-requests-feed #genhub-chat @Contributor community-outpost/GenHub #pinned-updates</div>
           <button class="btn-large" id="copyGenBtn">📋 Copy Command</button>
         </div>
       </div>
@@ -1556,6 +1560,7 @@
       const genLog = document.getElementById('genLog');
       const genRole = document.getElementById('genRole');
       const genRepo = document.getElementById('genRepo');
+      const genUpdates = document.getElementById('genUpdates');
       const generatedCmd = document.getElementById('generatedCmd');
       const copyGenBtn = document.getElementById('copyGenBtn');
 
@@ -1565,14 +1570,15 @@
         const log = (genLog ? genLog.value.trim() : '') || '#genhub-chat';
         const role = (genRole ? genRole.value.trim() : '') || '@Contributor';
         const repo = (genRepo ? genRepo.value.trim() : '') || 'community-outpost/GenHub';
+        const updates = (genUpdates ? genUpdates.value.trim() : '') || '#pinned-updates';
 
-        const cmd = `!genhub setup ${issues} ${prs} ${log} ${role} ${repo}`;
+        const cmd = `!genhub setup ${issues} ${prs} ${log} ${role} ${repo} ${updates}`;
         if (generatedCmd) {
           generatedCmd.innerText = cmd;
         }
       }
 
-      [genIssues, genPrs, genLog, genRole, genRepo].forEach(input => {
+      [genIssues, genPrs, genLog, genRole, genRepo, genUpdates].forEach(input => {
         if (input) input.addEventListener('input', updateGeneratedCommand);
       });
 

@@ -16,6 +16,7 @@ class SlashCommands:
         prs_forum_id: int = None,
         issues_feed_chat_id: int = None,
         prs_feed_chat_id: int = None,
+        updates_channel_id: int = None,
         contributor_role_id: int = None,
     ):
         updates = {
@@ -26,6 +27,7 @@ class SlashCommands:
             "prs_forum_id": prs_forum_id,
             "issues_feed_chat_id": issues_feed_chat_id,
             "prs_feed_chat_id": prs_feed_chat_id,
+            "updates_channel_id": updates_channel_id,
             "contributor_role_id": contributor_role_id,
         }
         for key, value in updates.items():
@@ -47,6 +49,7 @@ class SlashCommands:
         prs_forum_id: int = None,
         issues_feed_chat_id: int = None,
         prs_feed_chat_id: int = None,
+        updates_channel_id: int = None,
         contributor_role_id: int = None,
     ):
         await self._do_config_update(
@@ -58,6 +61,7 @@ class SlashCommands:
             prs_forum_id=prs_forum_id,
             issues_feed_chat_id=issues_feed_chat_id,
             prs_feed_chat_id=prs_feed_chat_id,
+            updates_channel_id=updates_channel_id,
             contributor_role_id=contributor_role_id,
         )
 
@@ -69,10 +73,11 @@ class SlashCommands:
         log_channel: discord.TextChannel = None,
         contributor_role: discord.Role = None,
         tracked_repo: str = None,
+        updates_channel: discord.abc.GuildChannel = None,
     ):
         """Configure GenHub using Discord native dropdown selectors."""
         summary = ["✅ **GenHub Configuration Updated via Slash UI:**", ""]
-        from .utils import find_associated_chat_channel
+        from .utils import find_associated_chat_channel, find_associated_updates_channel
 
         if issues_forum:
             await self.cog.config.issues_forum_id.set(issues_forum.id)
@@ -91,6 +96,16 @@ class SlashCommands:
                 if auto_chat:
                     await self.cog.config.prs_feed_chat_id.set(auto_chat.id)
                     summary.append(f"  ↳ 🔗 *Auto-linked PRs Chat:* {auto_chat.mention} (`{auto_chat.id}`)")
+
+        # Auto-detect updates feed if not passed
+        updates_target = updates_channel
+        if not updates_target and interaction.guild:
+            ref_forum = prs_forum or issues_forum
+            updates_target = find_associated_updates_channel(interaction.guild, ref_forum)
+
+        if updates_target:
+            await self.cog.config.updates_channel_id.set(updates_target.id)
+            summary.append(f"• **Pinned Updates Feed:** {updates_target.mention} (`{updates_target.id}`)")
 
         if log_channel:
             await self.cog.config.log_channel_id.set(log_channel.id)

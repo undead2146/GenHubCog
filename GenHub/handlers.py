@@ -368,32 +368,14 @@ class GitHubEventHandlers:
                 updates_ch = self.cog.bot.get_channel(updates_ch_id)
                 if updates_ch:
                     try:
-                        clean_body = clean_github_markdown(pr.get("body", ""))
-                        if len(clean_body) > 600:
-                            clean_body = clean_body[:550].rstrip() + f"... *([Read more on GitHub](<{url}>))*"
-
-                        embed = discord.Embed(
-                            title=f"🚀 Development Update: PR #{number} Merged into `{base_ref}`",
-                            url=url,
-                            description=f"**[{title}]({url})**\n\n" + (clean_body if clean_body else f"Merged by {author} into `{base_ref}`."),
-                            color=0x23A55A,
-                        )
-                        author_icon = pr.get("user", {}).get("avatar_url")
-                        embed.set_author(
-                            name=f"{author} ({repo_full_name})",
-                            url=f"https://github.com/{author}",
-                            icon_url=author_icon if author_icon else "https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png",
-                        )
-                        thread_ref = f"<#{thread.id}>" if thread else ""
-                        if thread_ref:
-                            embed.add_field(name="Discussion Thread", value=thread_ref, inline=True)
-                        embed.set_footer(text=f"GeneralsHub Development Feed • {repo_full_name}")
-                        await updates_ch.send(embed=embed)
+                        thread_ref = f" • Thread: <#{thread.id}>" if thread else ""
+                        msg = f"🔨 **Merged into `{base_ref}`:** [**#{number} {title}**](<{url}>){thread_ref} • By **{author}**"
+                        await updates_ch.send(msg)
                     except Exception as e:
                         print(f"⚠️ Failed to send pinned update on merge: {e}")
 
     async def handle_release(self, data, repo_full_name):
-        """Handle GitHub release events and announce to Pinned Updates channel."""
+        """Handle GitHub release events and announce to Pinned Updates channel with prominent visual styling."""
         action = data.get("action")
         if action not in ("published", "created", "released"):
             return
@@ -405,6 +387,7 @@ class GitHubEventHandlers:
         url = release.get("html_url", "")
         author = release.get("author", {}).get("login", "Unknown")
         author_icon = release.get("author", {}).get("avatar_url")
+        is_prerelease = release.get("prerelease", False) or "alpha" in tag_name.lower() or "beta" in tag_name.lower()
 
         updates_ch_id = await self._get_config_id("updates_channel_id")
         if updates_ch_id:
@@ -413,20 +396,24 @@ class GitHubEventHandlers:
                 try:
                     clean_body = clean_github_markdown(body)
                     if len(clean_body) > 1800:
-                        clean_body = clean_body[:1700].rstrip() + f"\n\n... *([Read full release notes on GitHub](<{url}>))*"
+                        clean_body = clean_body[:1700].rstrip() + f"\n\n... *([Read full changelog on GitHub](<{url}>))*"
+
+                    # Distinctive styling: Magenta for Alpha/Beta/Pre-release, Blurple for Official Releases
+                    badge = "🧪 Alpha / Pre-release" if is_prerelease else "🎉 Official Release"
+                    color = 0xEB459E if is_prerelease else 0x5865F2
 
                     embed = discord.Embed(
-                        title=f"🎉 Official Release: {name} ({tag_name})",
+                        title=f"{badge}: {name} ({tag_name})",
                         url=url,
-                        description=clean_body if clean_body else f"A new version **{tag_name}** is now available.",
-                        color=0x5865F2,
+                        description=(clean_body if clean_body else f"Release **{tag_name}** is now available.") + f"\n\n↳ 📦 [**Download Release Assets on GitHub**](<{url}>)",
+                        color=color,
                     )
                     embed.set_author(
                         name=f"Published by {author} ({repo_full_name})",
                         url=url,
                         icon_url=author_icon if author_icon else "https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png",
                     )
-                    embed.set_footer(text=f"GeneralsHub Official Release • {repo_full_name}")
+                    embed.set_footer(text=f"GeneralsHub Release Announcement • {repo_full_name}")
                     await updates_ch.send(embed=embed)
                 except Exception as e:
                     print(f"⚠️ Failed to send release announcement: {e}")

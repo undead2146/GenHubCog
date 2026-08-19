@@ -55,7 +55,7 @@ class ConfigCommands(commands.Cog):
         """GenHub configuration commands."""
         pass
 
-    @genhub.command(name="setup", aliases=["quicksetup", "configure"])
+    @genhub.command(name="setup")
     async def setup_command(
         self,
         ctx,
@@ -64,11 +64,12 @@ class ConfigCommands(commands.Cog):
         log_channel: str = None,
         contributor_role: str = None,
         repo: str = None,
+        updates_channel: str = None,
     ):
-        """Configure all GenHub channels & repos in ONE single command.
-        
+        """All-in-one setup wizard to configure forums, feeds, roles, updates, and repositories in one go!
+
         Usage:
-          !genhub setup <#issues_forum> <#prs_forum> [<#log_channel>] [@role] [<owner/repo>]
+          !genhub setup <#issues_forum> <#prs_forum> [<#log_channel>] [@role] [<owner/repo>] [<#updates>]
         Or run `!genhub setup` with no arguments for the interactive step-by-step wizard!
         """
         import asyncio
@@ -80,7 +81,7 @@ class ConfigCommands(commands.Cog):
 
             await ctx.send("🚀 **Starting GenHub All-In-One Setup Wizard**\n"
                            "*(You can mention channels `#channel`, paste IDs `141...`, or type `skip` at any step)*\n\n"
-                           "**Step 1/5:** Mention or paste the channel ID for the **GitHub Issues Forum** (`github-issues-feed`):")
+                           "**Step 1/6:** Mention or paste the channel ID for the **GitHub Issues Forum** (`github-issues-feed`):")
             try:
                 msg = await ctx.bot.wait_for("message", check=check, timeout=60)
                 issues_forum = msg.content.strip()
@@ -88,7 +89,7 @@ class ConfigCommands(commands.Cog):
                 await ctx.send("⏱️ Setup wizard timed out.")
                 return
 
-            await ctx.send("**Step 2/5:** Mention or paste the channel ID for the **Pull Requests Forum** (`pull-requests-feed`):")
+            await ctx.send("**Step 2/6:** Mention or paste the channel ID for the **Pull Requests Forum** (`pull-requests-feed`):")
             try:
                 msg = await ctx.bot.wait_for("message", check=check, timeout=60)
                 prs_forum = msg.content.strip()
@@ -96,7 +97,7 @@ class ConfigCommands(commands.Cog):
                 await ctx.send("⏱️ Setup wizard timed out.")
                 return
 
-            await ctx.send("**Step 3/5:** Mention or paste the **Log / Bot Chat Channel** (`genhub-chat`), or type `skip`:")
+            await ctx.send("**Step 3/6:** Mention or paste the **Log / Bot Chat Channel** (`genhub-chat`), or type `skip`:")
             try:
                 msg = await ctx.bot.wait_for("message", check=check, timeout=60)
                 log_channel = msg.content.strip()
@@ -104,7 +105,7 @@ class ConfigCommands(commands.Cog):
                 await ctx.send("⏱️ Setup wizard timed out.")
                 return
 
-            await ctx.send("**Step 4/5:** Mention the **Contributor Role** to tag on PR open/merge (e.g. `@Contributor`), or type `skip`:")
+            await ctx.send("**Step 4/6:** Mention the **Contributor Role** to tag on PR open/merge (e.g. `@Contributor`), or type `skip`:")
             try:
                 msg = await ctx.bot.wait_for("message", check=check, timeout=60)
                 contributor_role = msg.content.strip()
@@ -112,10 +113,18 @@ class ConfigCommands(commands.Cog):
                 await ctx.send("⏱️ Setup wizard timed out.")
                 return
 
-            await ctx.send("**Step 5/5:** Enter the **GitHub Repository** to track (e.g. `community-outpost/GenHub`), or type `skip`:")
+            await ctx.send("**Step 5/6:** Enter the **GitHub Repository** to track (e.g. `community-outpost/GenHub`), or type `skip`:")
             try:
                 msg = await ctx.bot.wait_for("message", check=check, timeout=60)
                 repo = msg.content.strip()
+            except asyncio.TimeoutError:
+                await ctx.send("⏱️ Setup wizard timed out.")
+                return
+
+            await ctx.send("**Step 6/6:** Mention or paste the **Pinned Updates Channel / Thread** (`pinned-updates`), or type `skip`:")
+            try:
+                msg = await ctx.bot.wait_for("message", check=check, timeout=60)
+                updates_channel = msg.content.strip()
             except asyncio.TimeoutError:
                 await ctx.send("⏱️ Setup wizard timed out.")
                 return
@@ -125,10 +134,11 @@ class ConfigCommands(commands.Cog):
         prs_fid = self._resolve_channel_id(ctx.guild, prs_forum)
         log_cid = self._resolve_channel_id(ctx.guild, log_channel)
         role_id = self._resolve_role_id(ctx.guild, contributor_role)
+        updates_cid = self._resolve_channel_id(ctx.guild, updates_channel)
 
         summary = ["✅ **GenHub All-In-One Setup Complete!**", ""]
 
-        from .utils import find_associated_chat_channel
+        from .utils import find_associated_chat_channel, find_associated_updates_channel
 
         if issues_fid:
             await self.cog.config.issues_forum_id.set(issues_fid)
@@ -153,6 +163,17 @@ class ConfigCommands(commands.Cog):
                     summary.append(f"  ↳ 🔗 *Auto-linked PRs Chat:* {auto_chat.mention} (`{auto_chat.id}`)")
         else:
             summary.append(f"• **PRs Forum:** ⚠️ Could not resolve `{prs_forum}`")
+
+        # Auto-detect updates feed if not explicitly given
+        if not updates_cid and ctx.guild:
+            ref_ch = ctx.guild.get_channel(prs_fid) if prs_fid else None
+            auto_updates = find_associated_updates_channel(ctx.guild, ref_ch)
+            if auto_updates:
+                updates_cid = auto_updates.id
+
+        if updates_cid:
+            await self.cog.config.updates_channel_id.set(updates_cid)
+            summary.append(f"• **Pinned Updates Feed:** <#{updates_cid}> (`{updates_cid}`)")
 
         if log_cid:
             await self.cog.config.log_channel_id.set(log_cid)

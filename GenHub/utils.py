@@ -469,3 +469,32 @@ def find_associated_chat_channel(guild, forum_channel, is_pr: bool):
 
     return None
 
+
+def find_associated_updates_channel(guild, forum_channel=None):
+    """Heuristically discover a pinned updates / announcements channel or thread."""
+    if not guild:
+        return None
+
+    keywords = ["pinnedupdates", "pinnedupdate", "updates", "pinned", "announcements", "developmentupdates", "devupdates"]
+
+    # 1. Search inside the same category if forum provided
+    if forum_channel:
+        category = getattr(forum_channel, "category", None)
+        if category and hasattr(category, "channels"):
+            for ch in category.channels:
+                name = ch.name.lower().replace("-", "").replace("_", "").replace(" ", "")
+                for kw in keywords:
+                    if kw in name:
+                        return ch
+
+    # 2. Search all channels in guild
+    if hasattr(guild, "channels"):
+        for ch in guild.channels:
+            name = ch.name.lower().replace("-", "").replace("_", "").replace(" ", "")
+            for kw in keywords:
+                if kw in name:
+                    return ch
+
+    return None
+
+
