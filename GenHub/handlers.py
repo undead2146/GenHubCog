@@ -13,6 +13,8 @@ from .utils import (
     get_or_create_thread,
     get_or_create_tag,
     is_bot_author,
+    clean_github_markdown,
+    create_comment_embed,
 )
 
 GITHUB_ISSUE_RE = re.compile(
@@ -157,29 +159,32 @@ class GitHubEventHandlers:
         comments.sort(key=lambda c: c.get('created_at', ''))
         return comments
 
-    async def _post_comment_to_thread(self, thread, comment, role_mention):
-        """Post a single comment to a Discord thread."""
-        body = comment.get('body', '')
-        if not body or body.strip() == '':
+    async def _post_comment_to_thread(self, thread, comment, role_mention, extra_count: int = 0):
+        """Post a single comment to a Discord thread formatted as a sleek Discord embed."""
+        body = comment.get("body", "")
+        if not body or body.strip() == "":
             return
-        
-        author = comment.get('user', {}).get('login', 'Unknown')
-        url = comment.get('html_url', '')
-        
-        # Determine comment type
-        if comment.get('is_review_comment'):
-            comment_type = "PR review comment"
-            emoji = "💬"
-        else:
-            comment_type = "comment"
-            emoji = "💬"
-        
-        prefix = f"{emoji} **{comment_type}** by **{author}** → [View Comment]({url})\n"
-        
+
+        author = comment.get("user", {}).get("login", "Unknown") if comment.get("user") else "Unknown"
+        author_icon = comment.get("user", {}).get("avatar_url") if comment.get("user") else None
+        url = comment.get("html_url", "")
+        is_bot = is_bot_author(author, comment.get("user"))
+        is_review = comment.get("is_review_comment", False)
+
+        embed = create_comment_embed(
+            author=author,
+            body=body,
+            url=url,
+            author_icon=author_icon,
+            is_bot=is_bot,
+            is_review=is_review,
+            extra_count=extra_count,
+        )
+
         try:
-            await send_message(thread, body, prefix=prefix)
+            await send_message(thread, embed=embed)
         except Exception as e:
-            print(f"⚠️ Failed to post comment to thread: {e}")
+            print(f"⚠️ Failed to post comment embed to thread: {e}")
 
     # ---------------------------
     # Entry Point
@@ -372,9 +377,17 @@ class GitHubEventHandlers:
         if not thread or not body:
             return
 
-        # No role mention on comments
-        prefix = f"💬 **New {'PR' if is_pr else 'Issue'} comment** by **{author}** → [View Comment]({url})\n"
-        await send_message(thread, body, prefix=prefix)
+        author_icon = data["comment"]["user"].get("avatar_url") if data["comment"].get("user") else None
+        is_bot = is_bot_author(author, data["comment"].get("user"))
+        embed = create_comment_embed(
+            author=author,
+            body=body,
+            url=url,
+            author_icon=author_icon,
+            is_bot=is_bot,
+            is_review=False,
+        )
+        await send_message(thread, embed=embed)
 
     async def handle_pull_request_review(self, data, repo_full_name):
         if data.get("action") != "submitted":
@@ -428,23 +441,37 @@ class GitHubEventHandlers:
             if not thread:
                 return
 
+            is_bot = is_bot_author(entry["author"])
+            extra_comments = len(entry["comments"]) if (is_bot and len(entry["comments"]) > 1) else 0
+
             if entry["body"]:
-                # No role mention on review submissions
-                prefix = f"📝 **Review submitted** by **{entry['author']}** → [View Review]({entry['url']})\n"
-                await send_message(thread, entry["body"], prefix=prefix)
+                embed = create_comment_embed(
+                    author=entry["author"],
+                    body=entry["body"],
+                    url=entry["url"],
+                    is_bot=is_bot,
+                    is_review=True,
+                    extra_count=extra_comments,
+                )
+                await send_message(thread, embed=embed)
 
             if entry["comments"]:
-                if is_bot_author(entry["author"]) and len(entry["comments"]) > 1:
-                    bot_summary = (
-                        f"🤖 **{entry['author']}** submitted **{len(entry['comments'])} inline review comments**\n"
-                        f"↳ 🔗 [View full review and inline discussions on GitHub]({entry['url']})"
-                    )
-                    await send_message(thread, bot_summary)
+                if is_bot and len(entry["comments"]) > 1:
+                    if not entry["body"]:
+                        bot_summary = (
+                            f"🤖 **{entry['author']}** submitted **{len(entry['comments'])} inline review comments** • [View Review](<{entry['url']}>)"
+                        )
+                        await send_message(thread, bot_summary)
                 else:
                     for i, (body, url) in enumerate(reversed(entry["comments"])):
-                        # No role mention on review comments
-                        prefix = f"💬 **PR review comment** by **{entry['author']}** → [View Comment]({url})\n"
-                        await send_message(thread, body, prefix=prefix)
+                        embed = create_comment_embed(
+                            author=entry["author"],
+                            body=body,
+                            url=url,
+                            is_bot=is_bot,
+                            is_review=True,
+                        )
+                        await send_message(thread, embed=embed)
 
         if key in self.pending_reviews and "task" in self.pending_reviews[key]:
             self.pending_reviews[key]["task"].cancel()
@@ -557,35 +584,23 @@ class GitHubEventHandlers:
                     await self._post_comment_to_thread(thread, comment, role_mention)
                     await asyncio.sleep(0.4)
 
-                # 2. Post bot comments intelligently (1 summary + 1 collapsed count note)
+                # 2. Post bot comments cleanly as 1 embed with extra comment count in footer
                 for bot_name, b_comments in bot_comments_by_author.items():
                     if self.reconcile_cancelled:
                         break
                     if not b_comments:
                         continue
 
-                    # Post the primary / first bot comment (e.g. review summary)
+                    # Post the primary / first bot comment (with any extra comment count noted in footer)
                     first_bot_comment = b_comments[0]
-                    body = first_bot_comment.get('body', '').strip()
-                    url = first_bot_comment.get('html_url', '')
-
-                    # Truncate overly long bot markdown if needed
-                    if len(body) > 1500:
-                        body = body[:1450] + f"\n\n... *(Truncated bot summary — [Read full on GitHub]({url}))*"
-
-                    prefix = f"🤖 **{bot_name}** summary → [View Comment]({url})\n"
-                    await send_message(thread, body, prefix=prefix)
-                    await asyncio.sleep(0.4)
-
-                    # If the bot made multiple other comments (e.g. 10 line review notes)
                     extra_count = len(b_comments) - 1
-                    if extra_count > 0:
-                        extra_summary = (
-                            f"🤖 **{bot_name}** also posted **{extra_count} additional automated comments**\n"
-                            f"↳ 🔗 [View all comments on GitHub]({url})"
-                        )
-                        await send_message(thread, extra_summary)
-                        await asyncio.sleep(0.4)
+                    await self._post_comment_to_thread(
+                        thread,
+                        first_bot_comment,
+                        role_mention,
+                        extra_count=extra_count,
+                    )
+                    await asyncio.sleep(0.4)
 
         except Exception as e:
             print(f"⚠️ Error fetching/posting comments for #{number}: {e}")

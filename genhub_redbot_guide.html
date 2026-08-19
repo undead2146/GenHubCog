@@ -873,7 +873,7 @@
 
     <div class="nav-section-title">Architecture & Rules</div>
     <ul class="nav-links">
-      <li><a href="#notification-rules" class="nav-link"><span>🔔</span> Notification Rules</a></li>
+      <li><a href="#comment-formatting" class="nav-link"><span>💬</span> Comments & Mentions</a></li>
       <li><a href="#commands" class="nav-link"><span>⌨️</span> Command Reference</a></li>
       <li><a href="#discord-layout" class="nav-link"><span>💬</span> GeneralsHub Layout</a></li>
       <li><a href="#github-webhook" class="nav-link"><span>🐙</span> Webhook Settings</a></li>
@@ -1201,45 +1201,27 @@
       </div>
     </section>
 
-    <!-- Notification Rules Callout -->
-    <div class="rule-callout" id="notification-rules">
-      <strong>🔔 Notification & Role Mention Policy:</strong> Role mentions (<code>@Contributor</code>) are triggered **ONLY** when a <strong>New PR is Opened</strong> or an existing <strong>PR is Merged</strong>. Regular comments, issue creations, closed unmerged PRs, and reviews create threads cleanly with zero notification spam.
-    </div>
-
-    <!-- Bot Spam Filtering & Reconcile Control -->
-    <section id="bot-filtering">
+    <!-- Comment Formatting & Mentions -->
+    <section id="comment-formatting">
       <div class="section-header">
-        <h3>🤖 Intelligent Bot Spam Protection & Reconcile Control</h3>
+        <h3>Comment Formatting & Mentions</h3>
       </div>
       <p class="section-desc">
-        How GenHub prevents automated bots (CodeRabbit, DeepSource, GitHub Actions, Dependabot) from flooding Discord threads during live reviews and reconcile:
+        Rules for notifications, role mentions, and GitHub comment formatting in Discord threads:
       </p>
 
       <div class="grid-2">
         <div class="card">
-          <div class="card-title"><span>🛡️</span> 1. AI Review Digest (Zero Spam)</div>
+          <div class="card-title">Role Mention Rules</div>
           <p>
-            When an automated review bot comments on 15 different lines of code, GenHub posts:
+            Role mentions (<code>@Contributor</code>) are only sent when a PR is opened or merged. All issue creations, issue comments, reviews, and closed unmerged PRs post without role mentions.
           </p>
-          <ul style="font-size:13px; color:#dbdee1; padding-left:18px; margin-bottom:12px; line-height:1.7;">
-            <li>The <strong>Primary Review Summary</strong> (e.g. CodeRabbit overview / walkthrough).</li>
-            <li><strong>One Single Aggregated Digest Note</strong> for remaining line notes:
-              <br><code>🤖 coderabbitai[bot] also posted 14 inline review comments (View on GitHub)</code>
-            </li>
-          </ul>
         </div>
 
         <div class="card">
-          <div class="card-title"><span>🛑</span> 2. Instant Reconcile Cancellation</div>
+          <div class="card-title">Markdown Cleaning & Embed Formatting</div>
           <p>
-            If you start a synchronization and need to stop it immediately:
-          </p>
-          <div class="code-block" data-copy="!genhub cancelreconcile">
-            <span>!genhub cancelreconcile</span>
-            <span class="copy-hint">📋 Copy</span>
-          </div>
-          <p style="margin-top:8px; font-size:12.5px;">
-            The bot stops further GitHub API queries and thread updates immediately.
+            GitHub comments are parsed into Discord embeds, removing raw HTML tags (<code>&lt;details&gt;</code>, <code>&lt;summary&gt;</code>, <code>&lt;!-- --&gt;</code>). Automated bot reviews post the primary summary embed, aggregating any additional line notes into the embed footer.
           </p>
         </div>
       </div>

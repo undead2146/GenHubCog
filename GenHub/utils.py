@@ -1,8 +1,80 @@
 import discord
 import re
 
-async def send_message(channel, content: str, prefix: str = ""):
-    """Send a message, splitting into chunks if >2000 chars (including prefix)."""
+def clean_github_markdown(text: str) -> str:
+    """Clean and convert GitHub-specific HTML and markdown tags into clean Discord markdown."""
+    if not text:
+        return ""
+
+    # 1. Strip HTML comments <!-- ... -->
+    text = re.sub(r"<!--[\s\S]*?-->", "", text)
+
+    # 2. Convert <details><summary>...
+    text = re.sub(r"<summary>\s*<b>(.*?)</b>\s*</summary>", r"**\1:**", text, flags=re.IGNORECASE)
+    text = re.sub(r"<summary>\s*<strong>(.*?)</strong>\s*</summary>", r"**\1:**", text, flags=re.IGNORECASE)
+    text = re.sub(r"<summary>\s*(.*?)\s*</summary>", r"**\1:**", text, flags=re.IGNORECASE)
+    text = re.sub(r"</?(?:details|summary)[^>]*>", "", text, flags=re.IGNORECASE)
+
+    # 3. HTML formatting to markdown
+    text = re.sub(r"<b>(.*?)</b>", r"**\1**", text, flags=re.IGNORECASE)
+    text = re.sub(r"<strong>(.*?)</strong>", r"**\1**", text, flags=re.IGNORECASE)
+    text = re.sub(r"<i>(.*?)</i>", r"*\1*", text, flags=re.IGNORECASE)
+    text = re.sub(r"<em>(.*?)</em>", r"*\1*", text, flags=re.IGNORECASE)
+    text = re.sub(r"<code>(.*?)</code>", r"`\1`", text, flags=re.IGNORECASE)
+    text = re.sub(r"<br\s*/?>", "\n", text, flags=re.IGNORECASE)
+    text = re.sub(r"</?p>", "\n", text, flags=re.IGNORECASE)
+
+    # 4. Remove other generic HTML tags
+    text = re.sub(r"<[/]?(?:div|span|section|article|font|center)[^>]*>", "", text, flags=re.IGNORECASE)
+
+    # 5. Clean extra whitespace
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    return text.strip()
+
+
+def create_comment_embed(
+    author: str,
+    body: str,
+    url: str,
+    author_icon: str = None,
+    is_bot: bool = False,
+    is_review: bool = False,
+    extra_count: int = 0,
+) -> discord.Embed:
+    """Create a sleek Discord Embed for a GitHub issue or review comment."""
+    clean_body = clean_github_markdown(body)
+
+    if len(clean_body) > 2040:
+        clean_body = clean_body[:1950].rstrip() + f"\n\n... *([Read full comment on GitHub](<{url}>))*"
+
+    color = 0x5865F2 if not is_bot else (0x23A55A if is_review else 0x4E5058)
+    role_label = "Bot Review Summary" if (is_bot and is_review) else ("Bot Summary" if is_bot else "Comment")
+
+    embed = discord.Embed(
+        description=clean_body if clean_body else "*Empty comment body*",
+        color=color,
+    )
+    author_name = f"{author} ({role_label})"
+    embed.set_author(
+        name=author_name[:256],
+        url=url,
+        icon_url=author_icon if author_icon else "https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png",
+    )
+
+    if extra_count > 0:
+        embed.set_footer(text=f"↳ Also submitted {extra_count} additional automated review comments on GitHub")
+    else:
+        embed.set_footer(text="GitHub Discussion")
+
+    return embed
+
+
+async def send_message(channel, content: str = "", prefix: str = "", embed: discord.Embed = None):
+    """Send a message or embed, splitting long text into chunks if needed."""
+    if embed:
+        await channel.send(embed=embed)
+        return
+
     limit = 2000
     allowed_mentions = discord.AllowedMentions(
         roles=True, users=True, everyone=True

@@ -57,9 +57,9 @@ async def test_pull_request_review_flushes_message():
 
         mock_send.assert_awaited()
         args, kwargs = mock_send.await_args
-        body = args[1]
-        prefix = kwargs.get("prefix", "")
-        assert "review submitted" in prefix.lower() or "Looks good" in body
+        embed = kwargs.get("embed")
+        body = embed.description if embed else (args[1] if len(args) > 1 else "")
+        assert "looks good" in body.lower() or "review" in str(kwargs).lower()
 
 
 @pytest.mark.asyncio
@@ -114,6 +114,6 @@ async def test_pull_request_review_comment_flushes_message():
 
         mock_send.assert_awaited()
         args, kwargs = mock_send.await_args
-        body = args[1]
-        prefix = kwargs.get("prefix", "")
-        assert "review comment" in prefix.lower() or "review comments" in prefix.lower() or "Please fix" in body
+        embed = kwargs.get("embed")
+        body = embed.description if embed else (args[1] if len(args) > 1 else "")
+        assert "please fix" in body.lower() or "comment" in str(kwargs).lower()

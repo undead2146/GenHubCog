@@ -27,6 +27,32 @@ def test_is_bot_author():
     assert is_bot_author("", {}) is False
 
 
+def test_clean_github_markdown():
+    from GenHub.utils import clean_github_markdown
+    raw = "<!-- comment --><b>Bold text</b> and <details><summary><b>Summary Title</b></summary>Details content</details>"
+    cleaned = clean_github_markdown(raw)
+    assert "<!-- comment -->" not in cleaned
+    assert "**Bold text**" in cleaned
+    assert "**Summary Title:**" in cleaned
+    assert "<details>" not in cleaned
+
+
+def test_create_comment_embed():
+    from GenHub.utils import create_comment_embed
+    embed = create_comment_embed(
+        author="coderabbitai[bot]",
+        body="<!-- hide -->**Review** body",
+        url="https://github.com/test/1",
+        is_bot=True,
+        is_review=True,
+        extra_count=5,
+    )
+    assert "Review" in embed.description
+    assert "coderabbitai[bot]" in embed.author.name
+    assert "5" in embed.footer.text
+
+
+
 
 @pytest.mark.asyncio
 async def test_send_message_prefix_too_long_and_split():
