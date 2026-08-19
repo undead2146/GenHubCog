@@ -98,7 +98,7 @@ class GitHubEventHandlers:
     async def log_error(self, message: str):
         """Log errors to console and optionally to a Discord log channel."""
         print(f"❌ GenHub Error: {message}")
-        log_channel_id = await self.cog.config.log_channel_id()
+        log_channel_id = await self._get_config_id("log_channel_id")
         if log_channel_id:
             channel = await self._resolve_target_channel(log_channel_id)
             if channel:
@@ -106,6 +106,18 @@ class GitHubEventHandlers:
                     await channel.send(f"❌ **GenHub Error:**\n```{message[:1900]}```")
                 except Exception as e:
                     print(f"⚠️ Failed to send error log to channel: {e}")
+
+    async def log_audit(self, message: str):
+        """Log operational notices to console and optionally to Discord log channel."""
+        print(f"📋 {message}")
+        log_channel_id = await self._get_config_id("log_channel_id")
+        if log_channel_id:
+            channel = await self._resolve_target_channel(log_channel_id)
+            if channel:
+                try:
+                    await channel.send(f"📋 **GenHub Log:** {message[:1900]}")
+                except Exception as e:
+                    print(f"⚠️ Failed to send audit log to channel: {e}")
 
     async def _make_github_request(self, session, url, method='GET'):
         """Make a GitHub API request with rate limiting and error handling."""
@@ -207,10 +219,19 @@ class GitHubEventHandlers:
     async def process_payload(self, request, data):
         repo_full_name = data.get("repository", {}).get("full_name")
         allowed_repos = await self.cog.config.allowed_repos()
-        if repo_full_name not in allowed_repos:
+        normalized_allowed = [r.lower().strip().lstrip("/") for r in allowed_repos]
+
+        event_type = request.headers.get("X-GitHub-Event", "unknown")
+        action = data.get("action", "")
+        action_suffix = f".{action}" if action else ""
+
+        if not repo_full_name or repo_full_name.lower().strip().lstrip("/") not in normalized_allowed:
+            warn_msg = f"⚠️ [Webhook] Ignored '{event_type}{action_suffix}' for '{repo_full_name}': not in allowed_repos list (Configured: {allowed_repos}). Run '!genhub addrepo {repo_full_name}' to allow."
+            print(warn_msg)
+            await self.log_error(warn_msg)
             return
 
-        event_type = request.headers.get("X-GitHub-Event")
+        print(f"📦 [Webhook] Dispatching '{event_type}{action_suffix}' for '{repo_full_name}'")
         handlers = {
             "issues": self.handle_issue,
             "pull_request": self.handle_pull_request,
@@ -222,6 +243,9 @@ class GitHubEventHandlers:
         handler = handlers.get(event_type)
         if handler:
             await handler(data, repo_full_name)
+            print(f"✅ [Webhook] Finished handling '{event_type}{action_suffix}' for '{repo_full_name}'")
+        else:
+            print(f"ℹ️ [Webhook] No handler for event '{event_type}' (repo: {repo_full_name}), skipping")
 
     # ---------------------------
     # Event Handlers
