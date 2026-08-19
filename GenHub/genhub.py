@@ -52,9 +52,11 @@ class GenHub(commands.Cog):
         except Exception as e:
             print(f"⚠️ Failed to sync slash commands: {e}")
 
-        # Register text commands cog if not already added
-        if not self.bot.get_cog("ConfigCommands"):
+        # Register text commands cog
+        try:
             await self.bot.add_cog(ConfigCommands(self))
+        except (discord.ClientException, Exception):
+            pass
 
         # Register slash commands
         import discord
@@ -76,8 +78,10 @@ class GenHub(commands.Cog):
 
     async def cog_unload(self):
         await self.webhook.stop()
-        if self.bot.get_cog("ConfigCommands"):
+        try:
             await self.bot.remove_cog("ConfigCommands")
+        except Exception:
+            pass
         # Save thread cache
         await self.config.thread_cache.set(self.thread_cache)
         if hasattr(self, "task"):

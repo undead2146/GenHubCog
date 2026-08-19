@@ -19,6 +19,7 @@ class WebhookServer:
         async def handle_health(request: web.Request):
             return web.Response(text="OK")
 
+        app = web.Application()
         app.router.add_post("/github", self.webhook_handler)
         app.router.add_post("/webhook", self.webhook_handler)
         app.router.add_post("/", self.webhook_handler)

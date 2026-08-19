@@ -17,6 +17,17 @@ def test_format_message_contains_fields():
     assert "author" in msg
 
 
+def test_is_bot_author():
+    from GenHub.utils import is_bot_author
+    assert is_bot_author("coderabbitai[bot]") is True
+    assert is_bot_author("deepsource-autofix[bot]") is True
+    assert is_bot_author("dependabot[bot]") is True
+    assert is_bot_author("random_user", {"type": "Bot"}) is True
+    assert is_bot_author("human_developer", {"type": "User"}) is False
+    assert is_bot_author("", {}) is False
+
+
+
 @pytest.mark.asyncio
 async def test_send_message_prefix_too_long_and_split():
     channel = AsyncMock()

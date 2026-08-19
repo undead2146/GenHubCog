@@ -41,6 +41,45 @@ def get_role_mention(guild, role_id: int):
     return role.mention if role else ""
 
 
+def is_bot_author(author_login: str, user_data: dict = None) -> bool:
+    """Determine if a GitHub author is an automated bot."""
+    if not author_login:
+        return False
+    if user_data and user_data.get("type") == "Bot":
+        return True
+    login_lower = author_login.lower().strip()
+    if login_lower.endswith("[bot]"):
+        return True
+    known_bots = {
+        "coderabbitai",
+        "coderabbitai[bot]",
+        "deepsource-autofix",
+        "deepsource-autofix[bot]",
+        "deepsource[bot]",
+        "github-actions",
+        "github-actions[bot]",
+        "kilo-code-review",
+        "kilo-code-review[bot]",
+        "greptile-ai",
+        "greptile-ai[bot]",
+        "codecov",
+        "codecov[bot]",
+        "dependabot",
+        "dependabot[bot]",
+        "sonarcloud",
+        "sonarcloud[bot]",
+        "linear",
+        "linear[bot]",
+        "vercel",
+        "vercel[bot]",
+        "snyk-bot",
+        "renovate",
+        "renovate[bot]",
+    }
+    return login_lower in known_bots
+
+
+
 def format_message(emoji, action, title, url, author, role_mention, extra=""):
     """Format a standard message for issues/PRs."""
     # Keep action plain (no bold) so tests that match substrings like

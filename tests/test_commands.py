@@ -168,3 +168,13 @@ async def test_other_setters_and_showconfig():
     cog.config.all = fake_all
     await cmd.showconfig(ctx)
     ctx.send.assert_awaited()
+
+    # cancelreconcile when not running
+    cog.handlers.is_reconciling = False
+    await cmd.cancelreconcile(ctx)
+
+    # cancelreconcile when running
+    cog.handlers.is_reconciling = True
+    await cmd.cancelreconcile(ctx)
+    assert cog.handlers.reconcile_cancelled is True
+

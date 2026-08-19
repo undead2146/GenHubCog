@@ -485,7 +485,16 @@ class ConfigCommands(commands.Cog):
         Optionally filter by repo name."""
         await ctx.send("🔄 Starting reconciliation... this may take a while.")
         await self.cog.handlers.reconcile_forum_tags(ctx, repo_filter=repo)
-        await ctx.send("✅ Reconciliation complete.")
+
+    @genhub.command(aliases=["stopreconcile", "cancelsync"])
+    @commands.is_owner()
+    async def cancelreconcile(self, ctx):
+        """Cancel an ongoing reconciliation process immediately."""
+        if not getattr(self.cog.handlers, "is_reconciling", False):
+            await ctx.send("ℹ️ No reconciliation is currently running.")
+            return
+        self.cog.handlers.reconcile_cancelled = True
+        await ctx.send("🛑 Cancelling ongoing reconciliation... it will stop after current operation.")
 
     @genhub.command()
     async def clearcache(self, ctx):

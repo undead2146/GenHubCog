@@ -12,6 +12,7 @@ from .utils import (
     update_status_tag,
     get_or_create_thread,
     get_or_create_tag,
+    is_bot_author,
 )
 
 GITHUB_ISSUE_RE = re.compile(
@@ -60,6 +61,8 @@ class GitHubEventHandlers:
         self.cog = cog
         self.pending_reviews = {}
         self.rate_limiter = RateLimiter()
+        self.is_reconciling = False
+        self.reconcile_cancelled = False
 
     async def _get_config_id(self, key):
         """Safely fetch a channel/role ID from cog config without crashing on Mock objects."""
@@ -431,10 +434,17 @@ class GitHubEventHandlers:
                 await send_message(thread, entry["body"], prefix=prefix)
 
             if entry["comments"]:
-                for i, (body, url) in enumerate(reversed(entry["comments"])):
-                    # No role mention on review comments
-                    prefix = f"💬 **PR review comment** by **{entry['author']}** → [View Comment]({url})\n"
-                    await send_message(thread, body, prefix=prefix)
+                if is_bot_author(entry["author"]) and len(entry["comments"]) > 1:
+                    bot_summary = (
+                        f"🤖 **{entry['author']}** submitted **{len(entry['comments'])} inline review comments**\n"
+                        f"↳ 🔗 [View full review and inline discussions on GitHub]({entry['url']})"
+                    )
+                    await send_message(thread, bot_summary)
+                else:
+                    for i, (body, url) in enumerate(reversed(entry["comments"])):
+                        # No role mention on review comments
+                        prefix = f"💬 **PR review comment** by **{entry['author']}** → [View Comment]({url})\n"
+                        await send_message(thread, body, prefix=prefix)
 
         if key in self.pending_reviews and "task" in self.pending_reviews[key]:
             self.pending_reviews[key]["task"].cancel()
@@ -498,18 +508,21 @@ class GitHubEventHandlers:
             except Exception as e:
                 print(f"⚠️ Could not check thread history for #{number}: {e}")
 
+        if self.reconcile_cancelled:
+            return
+
         # Reconcile tags
         current = set(t.name.lower() for t in (thread.applied_tags or []))
         desired = set(t.name.lower() for t in (tags or []))
         if current != desired:
             await thread.edit(applied_tags=tags or [])
 
-        # Fetch and post comments
+        # Fetch and post comments with bot spam protection
         try:
             print(f"📥 Fetching comments for {repo}#{number}...")
             comments = await self._fetch_comments(session, repo, number, is_pr)
             
-            if comments:
+            if comments and not self.reconcile_cancelled:
                 print(f"💬 Found {len(comments)} comments for #{number}")
                 
                 # Get existing message IDs in thread to avoid duplicates
@@ -517,25 +530,63 @@ class GitHubEventHandlers:
                 try:
                     async for message in thread.history(limit=200):
                         # Extract GitHub comment URLs from messages
-                        urls = re.findall(r'https://github\.com/[^/]+/[^/]+/(?:issues|pull)/\d+#issuecomment-\d+', message.content)
+                        urls = re.findall(r'https://github\.com/[^/]+/[^/]+/(?:issues|pull)/\d+[#\w\-]+', message.content)
                         existing_comment_urls.update(urls)
                 except Exception as e:
                     print(f"⚠️ Could not check existing comments for #{number}: {e}")
                 
-                # Post new comments
-                new_comments_posted = 0
+                # Separate comments into human comments and bot comments
+                human_comments = []
+                bot_comments_by_author = {}
+
                 for comment in comments:
                     comment_url = comment.get('html_url', '')
-                    if comment_url not in existing_comment_urls:
-                        await self._post_comment_to_thread(thread, comment, role_mention)
-                        new_comments_posted += 1
-                        # Small delay between comments to avoid rate limits
-                        await asyncio.sleep(0.5)
-                
-                if new_comments_posted > 0:
-                    print(f"✅ Posted {new_comments_posted} new comments to #{number}")
-                else:
-                    print(f"ℹ️ All comments already exist for #{number}")
+                    if comment_url in existing_comment_urls:
+                        continue
+                    
+                    author_login = comment.get('user', {}).get('login', 'Unknown')
+                    if is_bot_author(author_login, comment.get('user')):
+                        bot_comments_by_author.setdefault(author_login, []).append(comment)
+                    else:
+                        human_comments.append(comment)
+
+                # 1. Post human comments
+                for comment in human_comments:
+                    if self.reconcile_cancelled:
+                        break
+                    await self._post_comment_to_thread(thread, comment, role_mention)
+                    await asyncio.sleep(0.4)
+
+                # 2. Post bot comments intelligently (1 summary + 1 collapsed count note)
+                for bot_name, b_comments in bot_comments_by_author.items():
+                    if self.reconcile_cancelled:
+                        break
+                    if not b_comments:
+                        continue
+
+                    # Post the primary / first bot comment (e.g. review summary)
+                    first_bot_comment = b_comments[0]
+                    body = first_bot_comment.get('body', '').strip()
+                    url = first_bot_comment.get('html_url', '')
+
+                    # Truncate overly long bot markdown if needed
+                    if len(body) > 1500:
+                        body = body[:1450] + f"\n\n... *(Truncated bot summary — [Read full on GitHub]({url}))*"
+
+                    prefix = f"🤖 **{bot_name}** summary → [View Comment]({url})\n"
+                    await send_message(thread, body, prefix=prefix)
+                    await asyncio.sleep(0.4)
+
+                    # If the bot made multiple other comments (e.g. 10 line review notes)
+                    extra_count = len(b_comments) - 1
+                    if extra_count > 0:
+                        extra_summary = (
+                            f"🤖 **{bot_name}** also posted **{extra_count} additional automated comments**\n"
+                            f"↳ 🔗 [View all comments on GitHub]({url})"
+                        )
+                        await send_message(thread, extra_summary)
+                        await asyncio.sleep(0.4)
+
         except Exception as e:
             print(f"⚠️ Error fetching/posting comments for #{number}: {e}")
 
@@ -543,78 +594,100 @@ class GitHubEventHandlers:
             await ctx.send(f"✅ Processed {idx} items for {repo_name}...")
 
     async def reconcile_forum_tags(self, ctx=None, repo_filter: str = None):
-        allowed_repos = await self.cog.config.allowed_repos()
-        print(f"🔍 Starting reconcile. Allowed repos: {allowed_repos}")
-        
-        token = await self.cog.config.github_token()
-        headers = {"Accept": "application/vnd.github.v3+json"}
-        if token:
-            headers["Authorization"] = f"token {token}"
-            print("✅ Token set in headers")
-        else:
-            print("❌ No token available")
+        self.is_reconciling = True
+        self.reconcile_cancelled = False
 
-        # Reset rate limiter for reconciliation
-        self.rate_limiter = RateLimiter()
+        try:
+            allowed_repos = await self.cog.config.allowed_repos()
+            print(f"🔍 Starting reconcile. Allowed repos: {allowed_repos}")
+            
+            token = await self.cog.config.github_token()
+            headers = {"Accept": "application/vnd.github.v3+json"}
+            if token:
+                headers["Authorization"] = f"token {token}"
+                print("✅ Token set in headers")
+            else:
+                print("❌ No token available")
 
-        async with aiohttp.ClientSession(headers=headers) as session:
-            processed_repos = set()
-            for repo in allowed_repos:
-                if repo_filter and repo != repo_filter:
-                    continue
+            # Reset rate limiter for reconciliation
+            self.rate_limiter = RateLimiter()
+
+            async with aiohttp.ClientSession(headers=headers) as session:
+                processed_repos = set()
+                for repo in allowed_repos:
+                    if self.reconcile_cancelled:
+                        if ctx:
+                            await ctx.send("🛑 Reconciliation cancelled by user.")
+                        return
+
+                    if repo_filter and repo != repo_filter:
+                        continue
+                        
+                    repo = repo.strip().lstrip("/")
+                    if repo in processed_repos:
+                        print(f"⏭️ Skipping already processed repo: {repo}")
+                        continue
+                        
+                    processed_repos.add(repo)
+                    repo_name = repo.split("/")[-1]
+                    print(f"🔄 Processing repo: {repo}")
+                    if ctx:
+                        await ctx.send(f"🔄 Reconciling repo: {repo}")
+
+                    # Check if repository exists
+                    repo_check_url = f"https://api.github.com/repos/{repo}"
+                    print(f"🔍 Checking if repository {repo} exists...")
                     
-                repo = repo.strip().lstrip("/")
-                if repo in processed_repos:
-                    print(f"⏭️ Skipping already processed repo: {repo}")
-                    continue
+                    status, _ = await self._make_github_request(session, repo_check_url)
                     
-                processed_repos.add(repo)
-                repo_name = repo.split("/")[-1]
-                print(f"🔄 Processing repo: {repo}")
-                if ctx:
-                    await ctx.send(f"🔄 Reconciling repo: {repo}")
+                    if status == 404:
+                        print(f"❌ Repository '{repo}' does not exist")
+                        if ctx:
+                            await ctx.send(f"❌ Repository '{repo}' does not exist.")
+                        continue
+                    elif status == 403:
+                        print(f"🚫 Cannot access repository '{repo}'")
+                        if ctx:
+                            await ctx.send(f"🚫 Cannot access '{repo}'. Check token permissions.")
+                        continue
+                    elif status == 401:
+                        print(f"🚫 Authentication failed for '{repo}'")
+                        if ctx:
+                            await ctx.send(f"🚫 GitHub authentication failed. Check your token.")
+                        continue
+                    elif status != 200:
+                        print(f"⚠️ Unexpected response {status} for {repo}")
+                        if ctx:
+                            await ctx.send(f"⚠️ Cannot verify repository '{repo}'")
+                        continue
+                    else:
+                        print(f"✅ Repository {repo} exists and is accessible")
 
-                # Check if repository exists
-                repo_check_url = f"https://api.github.com/repos/{repo}"
-                print(f"🔍 Checking if repository {repo} exists...")
-                
-                status, _ = await self._make_github_request(session, repo_check_url)
-                
-                if status == 404:
-                    print(f"❌ Repository '{repo}' does not exist")
-                    if ctx:
-                        await ctx.send(f"❌ Repository '{repo}' does not exist.")
-                    continue
-                elif status == 403:
-                    print(f"🚫 Cannot access repository '{repo}'")
-                    if ctx:
-                        await ctx.send(f"🚫 Cannot access '{repo}'. Check token permissions.")
-                    continue
-                elif status == 401:
-                    print(f"🚫 Authentication failed for '{repo}'")
-                    if ctx:
-                        await ctx.send(f"🚫 GitHub authentication failed. Check your token.")
-                    continue
-                elif status != 200:
-                    print(f"⚠️ Unexpected response {status} for {repo}")
-                    if ctx:
-                        await ctx.send(f"⚠️ Cannot verify repository '{repo}'")
-                    continue
-                else:
-                    print(f"✅ Repository {repo} exists and is accessible")
+                    # Process issues
+                    await self._reconcile_repo_items(session, repo, repo_name, False, ctx)
+                    if self.reconcile_cancelled:
+                        if ctx:
+                            await ctx.send("🛑 Reconciliation cancelled by user.")
+                        return
 
-                # Process issues
-                await self._reconcile_repo_items(session, repo, repo_name, False, ctx)
+                    # Process PRs
+                    await self._reconcile_repo_items(session, repo, repo_name, True, ctx)
+                    if self.reconcile_cancelled:
+                        if ctx:
+                            await ctx.send("🛑 Reconciliation cancelled by user.")
+                        return
 
-                # Process PRs
-                await self._reconcile_repo_items(session, repo, repo_name, True, ctx)
-
-        print("🎉 Reconciliation process finished!")
-        if ctx:
-            await ctx.send("✅ Reconciliation complete.")
+            print("🎉 Reconciliation process finished!")
+            if ctx:
+                await ctx.send("✅ Reconciliation complete.")
+        finally:
+            self.is_reconciling = False
 
     async def _reconcile_repo_items(self, session, repo, repo_name, is_pr, ctx):
         """Reconcile issues or PRs for a repository with rate limiting."""
+        if self.reconcile_cancelled:
+            return
+
         item_type = "PRs" if is_pr else "issues"
         endpoint = "pulls" if is_pr else "issues"
         forum_id = await (self.cog.config.prs_forum_id() if is_pr else self.cog.config.issues_forum_id())
@@ -638,6 +711,9 @@ class GitHubEventHandlers:
         state_param = "open" if is_pr else "all"
 
         while page <= max_pages:
+            if self.reconcile_cancelled:
+                return
+
             url = f"https://api.github.com/repos/{repo}/{endpoint}?state={state_param}&per_page=100&page={page}"
             print(f"🌐 Fetching {item_type.lower()} page {page} for {repo}")
 
@@ -653,6 +729,9 @@ class GitHubEventHandlers:
                 break
 
             for item in data:
+                if self.reconcile_cancelled:
+                    return
+
                 # Filter out PRs from issues endpoint
                 if not is_pr and item.get("pull_request"):
                     continue
@@ -675,7 +754,7 @@ class GitHubEventHandlers:
             page += 1
 
         print(f"✅ {item_type} processing complete for {repo}: {total_items} processed")
-        if ctx:
+        if ctx and not self.reconcile_cancelled:
             await ctx.send(f"✅ Processed {total_items} {item_type.lower()} for {repo}")
 
         # Clean up orphaned threads (only for issues; PRs only reconcile open ones so closed PR threads are preserved)
