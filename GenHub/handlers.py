@@ -643,75 +643,86 @@ class GitHubEventHandlers:
         if self.reconcile_cancelled:
             return
 
-        # Reconcile tags
+        # Reconcile tags (only if different)
         current = set(t.name.lower() for t in (thread.applied_tags or []))
         desired = set(t.name.lower() for t in (tags or []))
-        if current != desired:
-            await thread.edit(applied_tags=tags or [])
+        if current != desired and not created:
+            try:
+                await thread.edit(applied_tags=tags or [])
+            except Exception as e:
+                print(f"⚠️ Could not update tags for #{number}: {e}")
 
-        # Fetch and post comments with bot spam protection
-        try:
-            print(f"📥 Fetching comments for {repo}#{number}...")
-            comments = await self._fetch_comments(session, repo, number, is_pr)
-            
-            if comments and not self.reconcile_cancelled:
-                print(f"💬 Found {len(comments)} comments for #{number}")
-                
-                # Get existing message IDs in thread to avoid duplicates
-                existing_comment_urls = set()
-                try:
-                    async for message in thread.history(limit=200):
-                        # Extract GitHub comment URLs from messages
-                        urls = re.findall(r'https://github\.com/[^/]+/[^/]+/(?:issues|pull)/\d+[#\w\-]+', message.content)
-                        existing_comment_urls.update(urls)
-                except Exception as e:
-                    print(f"⚠️ Could not check existing comments for #{number}: {e}")
-                
-                # Separate comments into human comments and bot comments
-                human_comments = []
-                bot_comments_by_author = {}
+        # Check if item has any comments before making API requests
+        comment_count = item.get("comments", 0)
+        if is_pr:
+            comment_count += item.get("review_comments", 0)
 
-                for comment in comments:
-                    comment_url = comment.get('html_url', '')
-                    if comment_url in existing_comment_urls:
-                        continue
-                    
-                    author_login = comment.get('user', {}).get('login', 'Unknown')
-                    if is_bot_author(author_login, comment.get('user')):
-                        bot_comments_by_author.setdefault(author_login, []).append(comment)
-                    else:
-                        human_comments.append(comment)
+        if comment_count > 0 and not self.reconcile_cancelled:
+            # Fetch and post comments with bot spam protection
+            try:
+                print(f"📥 Fetching {comment_count} comments for {repo}#{number}...")
+                comments = await self._fetch_comments(session, repo, number, is_pr)
 
-                # 1. Post human comments
-                for comment in human_comments:
-                    if self.reconcile_cancelled:
-                        break
-                    await self._post_comment_to_thread(thread, comment, role_mention)
-                    await asyncio.sleep(0.4)
+                if comments and not self.reconcile_cancelled:
+                    # Get existing message URLs in thread to avoid duplicates (skip for newly created threads)
+                    existing_comment_urls = set()
+                    if not created:
+                        try:
+                            async for message in thread.history(limit=50):
+                                if message.content:
+                                    urls = re.findall(r'https://github\.com/[^/]+/[^/]+/(?:issues|pull)/\d+[#\w\-]+', message.content)
+                                    existing_comment_urls.update(urls)
+                                for emb in getattr(message, "embeds", []):
+                                    if emb.author and emb.author.url:
+                                        existing_comment_urls.add(emb.author.url)
+                                    if emb.description:
+                                        urls = re.findall(r'https://github\.com/[^/]+/[^/]+/(?:issues|pull)/\d+[#\w\-]+', emb.description)
+                                        existing_comment_urls.update(urls)
+                        except Exception as e:
+                            print(f"⚠️ Could not check existing comments for #{number}: {e}")
 
-                # 2. Post bot comments cleanly as 1 embed with extra comment count in footer
-                for bot_name, b_comments in bot_comments_by_author.items():
-                    if self.reconcile_cancelled:
-                        break
-                    if not b_comments:
-                        continue
+                    # Separate comments into human comments and bot comments
+                    human_comments = []
+                    bot_comments_by_author = {}
 
-                    # Post the primary / first bot comment (with any extra comment count noted in footer)
-                    first_bot_comment = b_comments[0]
-                    extra_count = len(b_comments) - 1
-                    await self._post_comment_to_thread(
-                        thread,
-                        first_bot_comment,
-                        role_mention,
-                        extra_count=extra_count,
-                    )
-                    await asyncio.sleep(0.4)
+                    for comment in comments:
+                        comment_url = comment.get('html_url', '')
+                        if comment_url and comment_url in existing_comment_urls:
+                            continue
 
-        except Exception as e:
-            print(f"⚠️ Error fetching/posting comments for #{number}: {e}")
+                        author_login = comment.get('user', {}).get('login', 'Unknown')
+                        if is_bot_author(author_login, comment.get('user')):
+                            bot_comments_by_author.setdefault(author_login, []).append(comment)
+                        else:
+                            human_comments.append(comment)
 
-        if ctx and idx % 10 == 0:  # Report more frequently
-            await ctx.send(f"✅ Processed {idx} items for {repo_name}...")
+                    # 1. Post human comments
+                    for comment in human_comments:
+                        if self.reconcile_cancelled:
+                            break
+                        await self._post_comment_to_thread(thread, comment, role_mention)
+                        await asyncio.sleep(0.2)
+
+                    # 2. Post bot comments cleanly as 1 embed with extra comment count in footer
+                    for bot_name, b_comments in bot_comments_by_author.items():
+                        if self.reconcile_cancelled:
+                            break
+                        if not b_comments:
+                            continue
+
+                        # Post the primary / first bot comment (with any extra comment count noted in footer)
+                        first_bot_comment = b_comments[0]
+                        extra_count = len(b_comments) - 1
+                        await self._post_comment_to_thread(
+                            thread,
+                            first_bot_comment,
+                            role_mention,
+                            extra_count=extra_count,
+                        )
+                        await asyncio.sleep(0.2)
+
+            except Exception as e:
+                print(f"⚠️ Error fetching/posting comments for #{number}: {e}")
 
     async def reconcile_forum_tags(self, ctx=None, repo_filter: str = None):
         self.is_reconciling = True
@@ -804,7 +815,7 @@ class GitHubEventHandlers:
             self.is_reconciling = False
 
     async def _reconcile_repo_items(self, session, repo, repo_name, is_pr, ctx):
-        """Reconcile issues or PRs for a repository with rate limiting."""
+        """Reconcile issues or PRs for a repository with bounded parallel workers."""
         if self.reconcile_cancelled:
             return
 
@@ -813,7 +824,7 @@ class GitHubEventHandlers:
         forum_id = await (self.cog.config.prs_forum_id() if is_pr else self.cog.config.issues_forum_id())
 
         print(f"📋 {item_type} forum ID: {forum_id}")
-        forum = self.cog.bot.get_channel(forum_id)
+        forum = await self._resolve_target_channel(forum_id)
 
         if not forum:
             print(f"⚠️ {item_type} forum not configured")
@@ -821,13 +832,13 @@ class GitHubEventHandlers:
                 await ctx.send(f"⚠️ {item_type} forum not configured, skipping for {repo}")
             return
 
-        print(f"✅ {item_type} forum found: {forum.name} ({forum.id})")
+        print(f"✅ {item_type} forum found: {getattr(forum, 'name', forum_id)} ({forum_id})")
 
         # Collect all GitHub items (for PRs only fetch open ones)
         github_items = {}
+        items_to_process = []
         page = 1
         max_pages = 50
-        total_items = 0
         state_param = "open" if is_pr else "all"
 
         while page <= max_pages:
@@ -862,20 +873,53 @@ class GitHubEventHandlers:
 
                 number = item["number"]
                 github_items[number] = item
-                total_items += 1
+                items_to_process.append(item)
 
-                print(f"📝 Processing {item_type.lower()[:-1]} {number}: {item['title'][:50]}...")
-                try:
-                    await self._reconcile_item(session, forum, repo, item, is_pr, ctx, total_items, repo_name)
-                except Exception as e:
-                    print(f"❌ Error reconciling {item_type.lower()[:-1]} {number}: {e}")
-                    await self.log_error(f"Error reconciling {repo}#{number}: {e}")
-
+            if len(data) < 100:
+                break
             page += 1
 
-        print(f"✅ {item_type} processing complete for {repo}: {total_items} processed")
+        total_count = len(items_to_process)
+        if total_count == 0:
+            print(f"ℹ️ No {item_type.lower()} found to reconcile for {repo}")
+            if ctx:
+                await ctx.send(f"ℹ️ No {item_type.lower()} to reconcile for `{repo}`.")
+            return
+
+        if ctx:
+            await ctx.send(f"⚡ Reconciling **{total_count} {item_type.lower()}** for `{repo}` in parallel (4 concurrent workers)...")
+
+        # Bounded parallel workers with Semaphore
+        concurrency_limit = 4
+        sem = asyncio.Semaphore(concurrency_limit)
+        processed_count = 0
+        progress_lock = asyncio.Lock()
+
+        async def worker(item, idx):
+            nonlocal processed_count
+            if self.reconcile_cancelled:
+                return
+            async with sem:
+                if self.reconcile_cancelled:
+                    return
+                try:
+                    await self._reconcile_item(session, forum, repo, item, is_pr, ctx, idx, repo_name)
+                except Exception as e:
+                    print(f"❌ Error reconciling {item_type.lower()[:-1]} #{item.get('number')}: {e}")
+                    await self.log_error(f"Error reconciling {repo}#{item.get('number')}: {e}")
+
+                async with progress_lock:
+                    processed_count += 1
+                    if ctx and not self.reconcile_cancelled and (processed_count % 15 == 0 or processed_count == total_count):
+                        pct = int((processed_count / total_count) * 100)
+                        await ctx.send(f"📊 **Progress ({repo_name} {item_type}):** {processed_count}/{total_count} processed ({pct}%)")
+
+        tasks = [worker(item, i + 1) for i, item in enumerate(items_to_process)]
+        await asyncio.gather(*tasks)
+
+        print(f"✅ {item_type} processing complete for {repo}: {processed_count}/{total_count} processed")
         if ctx and not self.reconcile_cancelled:
-            await ctx.send(f"✅ Processed {total_items} {item_type.lower()} for {repo}")
+            await ctx.send(f"✅ Processed {processed_count}/{total_count} {item_type.lower()} for `{repo}`")
 
         # Clean up orphaned threads (only for issues; PRs only reconcile open ones so closed PR threads are preserved)
         if not is_pr:
