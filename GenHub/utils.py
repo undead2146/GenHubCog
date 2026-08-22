@@ -693,6 +693,62 @@ def format_commits_log_snippet(commits: list, repo: str = None, max_commits: int
         return f"{count} commits ({', '.join(formatted)} +{remaining} more)"
 
 
+def format_pr_chat_commit_line(
+    repo_full_name: str,
+    number: int | str,
+    title: str,
+    pr_url: str,
+    commits: list,
+    sender: str,
+    thread: object = None,
+    compare_url: str = None,
+    after: str = None,
+) -> str:
+    """Format a clean, single-line commit update for pull request chat without any embeds."""
+    thread_id = None
+    if isinstance(thread, int):
+        thread_id = thread
+    elif hasattr(thread, "id") and getattr(thread, "id", None):
+        thread_id = thread.id
+    elif isinstance(thread, str) and thread.isdigit():
+        thread_id = int(thread)
+
+    thread_part = f" • Thread: <#{thread_id}>" if thread_id else ""
+    pr_link = f"[#{number} {title}](<{pr_url}>)" if pr_url else f"`#{number} {title}`"
+
+    if commits:
+        count = len(commits)
+        if count == 1:
+            info = parse_commit_info(commits[0], repo=repo_full_name)
+            short_sha = info["short_sha"]
+            c_url = info["url"]
+            headline = format_commit_headline(info["headline"], max_len=36)
+            c_link = f"[`{short_sha}`](<{c_url}>)" if c_url else f"`{short_sha}`"
+            commit_detail = f"{c_link} \"{headline}\""
+            return f"🔄 **Commit Pushed:** {pr_link} • {commit_detail}{thread_part} • By **{sender}**"
+        elif count == 2:
+            c1 = parse_commit_info(commits[0], repo=repo_full_name)
+            c2 = parse_commit_info(commits[1], repo=repo_full_name)
+            c1_link = f"[`{c1['short_sha']}`](<{c1['url']}>)" if c1["url"] else f"`{c1['short_sha']}`"
+            c2_link = f"[`{c2['short_sha']}`](<{c2['url']}>)" if c2["url"] else f"`{c2['short_sha']}`"
+            diff_link = f" • [Diff](<{compare_url}>)" if compare_url else ""
+            commit_detail = f"{c1_link}, {c2_link}{diff_link}"
+            return f"🔄 **Commits Pushed (2):** {pr_link} • {commit_detail}{thread_part} • By **{sender}**"
+        else:
+            c_first = parse_commit_info(commits[0], repo=repo_full_name)
+            c_last = parse_commit_info(commits[-1], repo=repo_full_name)
+            c_first_link = f"[`{c_first['short_sha']}`](<{c_first['url']}>)" if c_first["url"] else f"`{c_first['short_sha']}`"
+            c_last_link = f"[`{c_last['short_sha']}`](<{c_last['url']}>)" if c_last["url"] else f"`{c_last['short_sha']}`"
+            diff_link = f" • [Diff](<{compare_url}>)" if compare_url else ""
+            commit_detail = f"{c_first_link}...{c_last_link} ({count} commits){diff_link}"
+            return f"🔄 **Commits Pushed ({count}):** {pr_link} • {commit_detail}{thread_part} • By **{sender}**"
+
+    after_short = str(after)[:7] if after else ""
+    after_url = f"https://github.com/{repo_full_name.strip().lstrip('/')}/commit/{after}" if (after and repo_full_name) else ""
+    after_link = f" • [`{after_short}`](<{after_url}>)" if (after_short and after_url) else (f" • `{after_short}`" if after_short else "")
+    return f"🔄 **Commits Pushed:** {pr_link}{after_link}{thread_part} • By **{sender}**"
+
+
 def create_review_link_view(url: str, count: int) -> discord.ui.View:
     """Create an interactive link button view to inspect extra inline review comments on GitHub."""
     view = discord.ui.View(timeout=None)

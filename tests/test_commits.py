@@ -170,6 +170,49 @@ def test_format_commits_log_snippet():
     assert format_commits_log_snippet(commits) == '3 commits (`1234567` "feat: volume slider", `abcdef1` "fix: null reference" +1 more)'
 
 
+def test_format_pr_chat_commit_line():
+    from GenHub.utils import format_pr_chat_commit_line
+
+    mock_thread = Mock(id=1420182734986543264)
+
+    # 1. Single commit
+    c1 = [{"sha": "1a2b3c4d5e", "commit": {"message": "feat: volume slider"}, "html_url": "https://github.com/owner/repo/commit/1a2b3c4d5e"}]
+    line1 = format_pr_chat_commit_line(
+        "owner/repo", 50, "Add volume", "https://github.com/owner/repo/pull/50",
+        c1, "undead2146", thread=mock_thread
+    )
+    assert line1 == '🔄 **Commit Pushed:** [#50 Add volume](<https://github.com/owner/repo/pull/50>) • [`1a2b3c4`](<https://github.com/owner/repo/commit/1a2b3c4d5e>) "feat: volume slider" • Thread: <#1420182734986543264> • By **undead2146**'
+    # Ensure no naked URLs that generate embed previews
+    assert "(<https://" in line1
+    assert "](https://" not in line1
+
+    # 2. Two commits
+    c2 = [
+        {"sha": "1111111222", "commit": {"message": "feat: first"}, "html_url": "https://github.com/owner/repo/commit/1111111222"},
+        {"sha": "3333333444", "commit": {"message": "fix: second"}, "html_url": "https://github.com/owner/repo/commit/3333333444"},
+    ]
+    line2 = format_pr_chat_commit_line(
+        "owner/repo", 50, "Title", "https://github.com/owner/repo/pull/50",
+        c2, "undead2146", thread=mock_thread, compare_url="https://github.com/owner/repo/compare/111...333"
+    )
+    assert line2 == '🔄 **Commits Pushed (2):** [#50 Title](<https://github.com/owner/repo/pull/50>) • [`1111111`](<https://github.com/owner/repo/commit/1111111222>), [`3333333`](<https://github.com/owner/repo/commit/3333333444>) • [Diff](<https://github.com/owner/repo/compare/111...333>) • Thread: <#1420182734986543264> • By **undead2146**'
+
+    # 3. Three+ commits
+    c3 = c2 + [{"sha": "5555555666", "commit": {"message": "test: third"}, "html_url": "https://github.com/owner/repo/commit/5555555666"}]
+    line3 = format_pr_chat_commit_line(
+        "owner/repo", 50, "Title", "https://github.com/owner/repo/pull/50",
+        c3, "undead2146", thread=mock_thread, compare_url="https://github.com/owner/repo/compare/111...555"
+    )
+    assert line3 == '🔄 **Commits Pushed (3):** [#50 Title](<https://github.com/owner/repo/pull/50>) • [`1111111`](<https://github.com/owner/repo/commit/1111111222>)...[`5555555`](<https://github.com/owner/repo/commit/5555555666>) (3 commits) • [Diff](<https://github.com/owner/repo/compare/111...555>) • Thread: <#1420182734986543264> • By **undead2146**'
+
+    # 4. Fallback with empty commits and after SHA
+    line4 = format_pr_chat_commit_line(
+        "owner/repo", 50, "Title", "https://github.com/owner/repo/pull/50",
+        [], "undead2146", thread=mock_thread, after="abcdef1234567890"
+    )
+    assert line4 == '🔄 **Commits Pushed:** [#50 Title](<https://github.com/owner/repo/pull/50>) • [`abcdef1`](<https://github.com/owner/repo/commit/abcdef1234567890>) • Thread: <#1420182734986543264> • By **undead2146**'
+
+
 @pytest.mark.asyncio
 async def test_handle_pull_request_synchronize_with_commits():
     cog = Mock()
@@ -253,10 +296,16 @@ async def test_handle_pull_request_synchronize_with_commits():
         assert "PR Commits Pushed" in log_line
         assert "feat: sound slider" in log_line
 
-        # Verify feed chat received message
+        # Verify feed chat received clean single-line message without embeds and with thread/commit links
         assert mock_feed_chat.send.await_count >= 1
         feed_msg = mock_feed_chat.send.call_args_list[0][0][0]
-        assert "PR Commits Pushed" in feed_msg
+        assert "Commit Pushed" in feed_msg
+        assert "Thread: <#789>" in feed_msg
+        assert "2222222" in feed_msg
+        assert "feat: sound slider" in feed_msg
+        # Verify suppress_embeds was set
+        kwargs = mock_feed_chat.send.call_args_list[0][1]
+        assert kwargs.get("suppress_embeds") is True
 
 
 @pytest.mark.asyncio
@@ -337,6 +386,16 @@ async def test_handle_pull_request_opened_with_commits():
         log_line = handler.log_info.call_args_list[0][0][0]
         assert "PR Opened" in log_line
         assert "feat: initial commit" in log_line
+
+        # Verify feed chat message received clean single line with thread and commit link
+        assert mock_feed_chat.send.await_count >= 1
+        feed_msg = mock_feed_chat.send.call_args_list[0][0][0]
+        assert "PR Opened" in feed_msg
+        assert "Thread: <#789>" in feed_msg
+        assert "aaaaaaa" in feed_msg
+        assert "feat: initial commit" in feed_msg
+        kwargs = mock_feed_chat.send.call_args_list[0][1]
+        assert kwargs.get("suppress_embeds") is True
 
 
 @pytest.mark.asyncio

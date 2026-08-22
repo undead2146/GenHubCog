@@ -25,6 +25,7 @@ from .utils import (
     create_commits_embed,
     create_commits_link_view,
     format_commits_log_snippet,
+    format_pr_chat_commit_line,
 )
 
 GITHUB_ISSUE_RE = re.compile(
@@ -718,25 +719,52 @@ class GitHubEventHandlers:
                 except Exception as e:
                     print(f"⚠️ Could not update thread name on edit: {e}")
 
-        # Send concise overview notification to PRs Feed Chat channel/post (discovered in forum if not explicitly set)
+        # Send concise single-line overview notification without embeds to PRs Feed Chat
         chat_ch = await self._get_or_discover_feed_chat(forum_id, "prs_feed_chat_id")
         if chat_ch:
             thread_ref = f"<#{thread.id}>" if thread else ""
             thread_suffix = f" • Thread: {thread_ref}" if thread_ref else ""
             try:
+                msg = None
                 if action == "opened":
-                    commit_info = f" • **{len(commits)} commit(s)**" if commits else ""
-                    await chat_ch.send(f"🆕 **PR Opened:** [#{number} {title}]({url}){thread_suffix}{commit_info} • By **{author}** {role_mention}".strip())
+                    if commits:
+                        if len(commits) == 1:
+                            c_info = parse_commit_info(commits[0], repo=repo_full_name)
+                            c_link = f"[`{c_info['short_sha']}`](<{c_info['url']}>)" if c_info["url"] else f"`{c_info['short_sha']}`"
+                            msg = f"🆕 **PR Opened:** [#{number} {title}](<{url}>) • {c_link} \"{format_commit_headline(c_info['headline'], max_len=36)}\"{thread_suffix} • By **{author}** {role_mention}".strip()
+                        else:
+                            c1 = parse_commit_info(commits[0], repo=repo_full_name)
+                            c2 = parse_commit_info(commits[-1], repo=repo_full_name)
+                            c1_link = f"[`{c1['short_sha']}`](<{c1['url']}>)" if c1["url"] else f"`{c1['short_sha']}`"
+                            c2_link = f"[`{c2['short_sha']}`](<{c2['url']}>)" if c2["url"] else f"`{c2['short_sha']}`"
+                            msg = f"🆕 **PR Opened:** [#{number} {title}](<{url}>) • {c1_link}...{c2_link} ({len(commits)} commits){thread_suffix} • By **{author}** {role_mention}".strip()
+                    else:
+                        msg = f"🆕 **PR Opened:** [#{number} {title}](<{url}>){thread_suffix} • By **{author}** {role_mention}".strip()
                 elif action == "synchronize":
-                    commit_info = f" • **{len(commits)} new commit(s)**" if commits else ""
-                    await chat_ch.send(f"🔄 **PR Commits Pushed:** [#{number} {title}]({url}){thread_suffix}{commit_info} • By **{sender}**")
+                    msg = format_pr_chat_commit_line(
+                        repo_full_name=repo_full_name,
+                        number=number,
+                        title=title,
+                        pr_url=url,
+                        commits=commits,
+                        sender=sender,
+                        thread=thread,
+                        compare_url=compare_url,
+                        after=data.get("after"),
+                    )
                 elif action == "closed":
                     if is_merged:
-                        await chat_ch.send(f"🟣 **PR Merged:** [#{number} {title}]({url}){thread_suffix} • By **{author}** {role_mention}".strip())
+                        msg = f"🟣 **PR Merged:** [#{number} {title}](<{url}>){thread_suffix} • By **{author}** {role_mention}".strip()
                     else:
-                        await chat_ch.send(f"❌ **PR Closed (Unmerged):** [#{number} {title}]({url}){thread_suffix} • By **{author}** {role_mention}".strip())
+                        msg = f"❌ **PR Closed (Unmerged):** [#{number} {title}](<{url}>){thread_suffix} • By **{author}** {role_mention}".strip()
                 elif action == "reopened":
-                    await chat_ch.send(f"🔄 **PR Reopened:** [#{number} {title}]({url}){thread_suffix} • By **{author}**")
+                    msg = f"🔄 **PR Reopened:** [#{number} {title}](<{url}>){thread_suffix} • By **{author}**"
+
+                if msg:
+                    try:
+                        await chat_ch.send(msg, suppress_embeds=True)
+                    except (TypeError, discord.HTTPException):
+                        await chat_ch.send(msg)
             except Exception as e:
                 print(f"⚠️ Failed to send PR chat notification: {e}")
 
