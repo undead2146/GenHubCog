@@ -20,6 +20,11 @@ from .utils import (
     format_log_line,
     format_comment_preview,
     find_comment_message,
+    parse_commit_info,
+    format_commit_headline,
+    create_commits_embed,
+    create_commits_link_view,
+    format_commits_log_snippet,
 )
 
 GITHUB_ISSUE_RE = re.compile(
@@ -295,6 +300,48 @@ class GitHubEventHandlers:
             print(f"❌ Request failed for {url}: {e}")
             return None, None
 
+    async def _get_auth_headers(self) -> dict:
+        """Construct authorization and accept headers for GitHub API requests."""
+        headers = {"Accept": "application/vnd.github.v3+json"}
+        if hasattr(self.cog, "config") and hasattr(self.cog.config, "github_token"):
+            try:
+                import inspect
+                token = self.cog.config.github_token()
+                if inspect.isawaitable(token):
+                    token = await token
+                if token and isinstance(token, str) and token.strip():
+                    headers["Authorization"] = f"token {token.strip()}"
+            except Exception:
+                pass
+        return headers
+
+    async def _fetch_pr_commits(self, session, repo: str, number: int | str, limit: int = 100) -> list:
+        """Fetch commits for a pull request from GitHub API."""
+        commits = []
+        page = 1
+        while page <= 5:
+            url = f"https://api.github.com/repos/{repo}/pulls/{number}/commits?per_page=100&page={page}"
+            status, data = await self._make_github_request(session, url)
+            if status != 200 or not data or not isinstance(data, list):
+                break
+            commits.extend(data)
+            if len(data) < 100 or len(commits) >= limit:
+                break
+            page += 1
+        return commits[:limit]
+
+    async def _fetch_compare_commits(self, session, repo: str, before: str, after: str) -> tuple[list, str | None]:
+        """Fetch pushed commits and compare URL between two commit SHAs from GitHub compare API."""
+        if not before or not after or str(before).startswith("0000000") or before == after:
+            return [], None
+        url = f"https://api.github.com/repos/{repo}/compare/{before}...{after}"
+        status, data = await self._make_github_request(session, url)
+        if status == 200 and data and isinstance(data, dict):
+            commits = data.get("commits", [])
+            compare_url = data.get("html_url")
+            return (commits if isinstance(commits, list) else []), compare_url
+        return [], None
+
     async def _fetch_comments(self, session, repo, number, is_pr):
         """Fetch all comments for an issue or PR."""
         comments = []
@@ -424,6 +471,7 @@ class GitHubEventHandlers:
             "pull_request_review": self.handle_pull_request_review,
             "pull_request_review_comment": self.handle_pull_request_review_comment,
             "release": self.handle_release,
+            "push": self.handle_push,
         }
         handler = handlers.get(event_type)
         if handler:
@@ -585,9 +633,28 @@ class GitHubEventHandlers:
             self.cog.bot, forum_id, repo_full_name, number, title, url, tags, self.cog.thread_cache, initial_content
         )
 
+        # Fetch commits for opened and synchronize actions
+        commits = []
+        compare_url = None
+        if action in ("opened", "synchronize"):
+            try:
+                headers = await self._get_auth_headers()
+                async with aiohttp.ClientSession(headers=headers) as session:
+                    if action == "synchronize":
+                        before = data.get("before", "")
+                        after = data.get("after", "")
+                        commits, compare_url = await self._fetch_compare_commits(session, repo_full_name, before, after)
+                        if not commits:
+                            commits = await self._fetch_pr_commits(session, repo_full_name, number, limit=20)
+                    else:
+                        commits = await self._fetch_pr_commits(session, repo_full_name, number, limit=50)
+            except Exception as e:
+                await self.log_debug(f"ℹ️ Could not fetch PR commits for {repo_full_name}#{number}: {e}")
+
         # Log concise single-line entry
         if action == "opened":
-            await self.log_info(format_log_line("🚀 🆕", "PR Opened", repo_full_name, number, title, url, sender, item_type="PR", thread=thread))
+            commits_snippet = format_commits_log_snippet(commits, repo=repo_full_name)
+            await self.log_info(format_log_line("🚀 🆕", "PR Opened", repo_full_name, number, title, url, sender, item_type="PR", extra=commits_snippet, thread=thread))
         elif action == "closed":
             if is_merged:
                 await self.log_info(format_log_line("🟣 ✅", "PR Merged", repo_full_name, number, title, url, sender, item_type="PR", thread=thread))
@@ -596,7 +663,9 @@ class GitHubEventHandlers:
         elif action == "reopened":
             await self.log_info(format_log_line("🔓 🔄", "PR Reopened", repo_full_name, number, title, url, sender, item_type="PR", thread=thread))
         elif action == "synchronize":
-            await self.log_info(format_log_line("🔄 ⚡", "PR Synchronize", repo_full_name, number, title, url, sender, item_type="PR", thread=thread))
+            after = data.get("after", "")
+            commits_snippet = format_commits_log_snippet(commits, repo=repo_full_name) if commits else (f"`{after[:7]}`" if after else "")
+            await self.log_info(format_log_line("🔄 ⚡", "PR Commits Pushed", repo_full_name, number, title, url, sender, item_type="PR", extra=commits_snippet, thread=thread))
         elif action in ("assigned", "unassigned"):
             assignee = pr.get("assignee")
             assignee_name = assignee["login"] if assignee else "Unknown"
@@ -612,9 +681,21 @@ class GitHubEventHandlers:
         if not thread:
             return
 
-        # Send action-specific messages (skip "opened" if we already sent initial content)
-        if action == "opened" and initial_content:
-            pass
+        # Send action-specific messages
+        if action == "opened":
+            if commits:
+                embed = create_commits_embed(repo_full_name, number, title, url, commits, sender=author, is_initial=True)
+                view = create_commits_link_view(pr_url=url, count=len(commits))
+                await send_message(thread, embed=embed, view=view)
+        elif action == "synchronize":
+            if commits:
+                embed = create_commits_embed(repo_full_name, number, title, url, commits, sender=sender, compare_url=compare_url, is_initial=False)
+                view = create_commits_link_view(compare_url=compare_url, pr_url=url, count=len(commits))
+                await send_message(thread, embed=embed, view=view)
+            else:
+                after = data.get("after", "")
+                commit_ref = f" [`{after[:7]}`](<https://github.com/{repo_full_name}/commit/{after}>)" if after else ""
+                await send_message(thread, f"🔄 **New commits pushed** by **{sender}**{commit_ref}")
         elif action == "closed":
             if is_merged:
                 await update_status_tag(thread, "Merged")
@@ -644,7 +725,11 @@ class GitHubEventHandlers:
             thread_suffix = f" • Thread: {thread_ref}" if thread_ref else ""
             try:
                 if action == "opened":
-                    await chat_ch.send(f"🆕 **PR Opened:** [#{number} {title}]({url}){thread_suffix} • By **{author}** {role_mention}".strip())
+                    commit_info = f" • **{len(commits)} commit(s)**" if commits else ""
+                    await chat_ch.send(f"🆕 **PR Opened:** [#{number} {title}]({url}){thread_suffix}{commit_info} • By **{author}** {role_mention}".strip())
+                elif action == "synchronize":
+                    commit_info = f" • **{len(commits)} new commit(s)**" if commits else ""
+                    await chat_ch.send(f"🔄 **PR Commits Pushed:** [#{number} {title}]({url}){thread_suffix}{commit_info} • By **{sender}**")
                 elif action == "closed":
                     if is_merged:
                         await chat_ch.send(f"🟣 **PR Merged:** [#{number} {title}]({url}){thread_suffix} • By **{author}** {role_mention}".strip())
@@ -719,6 +804,27 @@ class GitHubEventHandlers:
                     await updates_ch.send(embed=embed)
                 except Exception as e:
                     print(f"⚠️ Failed to send release announcement: {e}")
+
+    async def handle_push(self, data, repo_full_name):
+        """Handle direct push events to branches or repository commits."""
+        ref = data.get("ref", "")
+        branch = ref.replace("refs/heads/", "") if ref.startswith("refs/heads/") else ref
+        commits = data.get("commits", [])
+        compare_url = data.get("compare", "")
+        pusher = data.get("pusher", {}).get("name") or data.get("sender", {}).get("login", "Unknown")
+        deleted = data.get("deleted", False)
+        created = data.get("created", False)
+        forced = data.get("forced", False)
+
+        if deleted:
+            await self.log_info(format_log_line("🗑️ ⚡", f"Branch Deleted `{branch}`", repo_full_name, None, branch, compare_url, pusher, item_type="Branch"))
+            return
+
+        commits_snippet = format_commits_log_snippet(commits, repo=repo_full_name)
+        badge = "⚡ 🆕" if created else ("🔄 ⚡" if not forced else "⚠️ ⚡")
+        action_name = f"Branch Created `{branch}`" if created else (f"Push to `{branch}`" if not forced else f"Force Push to `{branch}`")
+
+        await self.log_info(format_log_line(badge, action_name, repo_full_name, None, f"{len(commits)} commit(s)" if commits else branch, compare_url, pusher, item_type="Branch", extra=commits_snippet))
 
     async def handle_issue_comment(self, data, repo_full_name):
         action = data.get("action", "created")
@@ -1243,6 +1349,33 @@ class GitHubEventHandlers:
 
             except Exception as e:
                 await self.log_error(f"⚠️ Error fetching/posting comments for {repo}#{number}: {e}")
+
+        # Fetch and post PR commits if not already in thread
+        if is_pr and not self.reconcile_cancelled:
+            try:
+                has_commits = False
+                if not created:
+                    try:
+                        async for message in thread.history(limit=25):
+                            for emb in getattr(message, "embeds", []):
+                                footer_text = getattr(getattr(emb, "footer", None), "text", "") or ""
+                                if "GitHub Commits" in footer_text:
+                                    has_commits = True
+                                    break
+                            if has_commits:
+                                break
+                    except Exception:
+                        pass
+
+                if not has_commits and not self.reconcile_cancelled:
+                    commits = await self._fetch_pr_commits(session, repo, number, limit=50)
+                    if commits:
+                        embed = create_commits_embed(repo, number, title, url, commits, sender=author, is_initial=True)
+                        view = create_commits_link_view(pr_url=url, count=len(commits))
+                        await send_message(thread, embed=embed, view=view)
+                        await self.log_debug(f"📦 Posted {len(commits)} commits to reconciled thread {repo}#{number}")
+            except Exception as e:
+                await self.log_debug(f"ℹ️ Could not reconcile PR commits for {repo}#{number}: {e}")
 
     async def reconcile_forum_tags(self, ctx=None, repo_filter: str = None):
         self.is_reconciling = True

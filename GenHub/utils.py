@@ -525,6 +525,174 @@ def create_comment_embed(
     return embed
 
 
+def parse_commit_info(commit: dict, repo: str = None) -> dict:
+    """Extract normalized fields from a commit dictionary."""
+    sha = str(commit.get("sha") or commit.get("id") or "")
+    short_sha = sha[:7] if sha else "unknown"
+
+    raw_message = ""
+    if "commit" in commit and isinstance(commit["commit"], dict):
+        raw_message = commit["commit"].get("message", "")
+    elif "message" in commit:
+        raw_message = str(commit.get("message", ""))
+
+    headline = raw_message.split("\n")[0].strip() if raw_message else "*No commit message*"
+
+    author_name = "Unknown"
+    author_icon = None
+    if "author" in commit and isinstance(commit["author"], dict):
+        author_name = commit["author"].get("username") or commit["author"].get("login") or commit["author"].get("name") or "Unknown"
+        author_icon = commit["author"].get("avatar_url")
+    elif "commit" in commit and isinstance(commit["commit"], dict) and "author" in commit["commit"]:
+        author_name = commit["commit"]["author"].get("name") or "Unknown"
+    elif "committer" in commit and isinstance(commit["committer"], dict):
+        author_name = commit["committer"].get("username") or commit["committer"].get("name") or "Unknown"
+
+    url = commit.get("html_url") or commit.get("url") or ""
+    if not url and repo and sha:
+        clean_repo = repo.strip().lstrip("/")
+        url = f"https://github.com/{clean_repo}/commit/{sha}"
+
+    created_at = None
+    if "commit" in commit and isinstance(commit["commit"], dict) and "author" in commit["commit"]:
+        created_at = commit["commit"]["author"].get("date")
+    elif "timestamp" in commit:
+        created_at = commit.get("timestamp")
+
+    return {
+        "sha": sha,
+        "short_sha": short_sha,
+        "headline": headline,
+        "author": author_name,
+        "author_icon": author_icon,
+        "url": url,
+        "created_at": created_at,
+    }
+
+
+def format_commit_headline(headline: str, max_len: int = 70) -> str:
+    """Clean and truncate a commit message headline."""
+    if not headline:
+        return "*No commit message*"
+    cleaned = re.sub(r"<[^>]+>", "", headline)
+    cleaned = re.sub(r"[`\*_~]", "", cleaned)
+    cleaned = " ".join(cleaned.split()).strip()
+    if len(cleaned) > max_len:
+        cleaned = cleaned[: max_len - 3].rstrip() + "..."
+    return cleaned if cleaned else "*No commit message*"
+
+
+def create_commits_embed(
+    repo_full_name: str,
+    pr_number: int | str | None,
+    pr_title: str,
+    pr_url: str,
+    commits: list,
+    sender: str = None,
+    compare_url: str = None,
+    is_initial: bool = False,
+) -> discord.Embed:
+    """Create a sleek Discord Embed listing commits for a PR with links and authors."""
+    import datetime
+
+    count = len(commits)
+    if is_initial:
+        title = f"📦 Initial Commits ({count})" if count != 1 else "📦 Initial Commit (1)"
+    else:
+        title = f"🔄 {count} New Commit{'s' if count != 1 else ''} Pushed"
+
+    color = 0x2B86D4
+
+    commit_lines = []
+    max_display = 10
+    for c in commits[:max_display]:
+        info = parse_commit_info(c, repo=repo_full_name)
+        short_sha = info["short_sha"]
+        c_url = info["url"]
+        clean_msg = format_commit_headline(info["headline"])
+        c_author = info["author"]
+
+        link_part = f"[`{short_sha}`](<{c_url}>)" if c_url else f"`{short_sha}`"
+        commit_lines.append(f"• {link_part} {clean_msg} — *{c_author}*")
+
+    remaining = count - max_display
+    if remaining > 0:
+        target_link = compare_url or pr_url
+        if target_link:
+            commit_lines.append(f"• *... and **{remaining} more commits** ([View all on GitHub](<{target_link}>))*")
+        else:
+            commit_lines.append(f"• *... and **{remaining} more commits***")
+
+    description = "\n".join(commit_lines) if commit_lines else "*No commit details available.*"
+
+    embed = discord.Embed(
+        title=title,
+        url=compare_url or pr_url or "",
+        description=description,
+        color=color,
+    )
+
+    author_name = f"Pushed by {sender}" if sender else "GitHub Commits"
+    embed.set_author(
+        name=author_name[:256],
+        url=compare_url or pr_url or "",
+        icon_url="https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png",
+    )
+
+    repo_short = repo_full_name.split("/")[-1] if repo_full_name else "Repo"
+    footer_text = f"GitHub Commits • {repo_short} #{pr_number}" if pr_number else f"GitHub Commits • {repo_short}"
+    embed.set_footer(text=footer_text)
+
+    if commits:
+        latest_info = parse_commit_info(commits[-1], repo=repo_full_name)
+        if latest_info.get("created_at"):
+            try:
+                ts_str = str(latest_info["created_at"]).replace("Z", "+00:00")
+                embed.timestamp = datetime.datetime.fromisoformat(ts_str)
+            except Exception:
+                pass
+
+    return embed
+
+
+def create_commits_link_view(compare_url: str = None, pr_url: str = None, count: int = 1) -> discord.ui.View:
+    """Create an interactive link button view to inspect commits on GitHub."""
+    target_url = compare_url or pr_url
+    if not target_url:
+        return None
+    view = discord.ui.View(timeout=None)
+    label = f"View {count} Commits on GitHub" if count > 1 else "View Commit on GitHub"
+    button = discord.ui.Button(
+        style=discord.ButtonStyle.link,
+        label=label[:80],
+        url=target_url,
+        emoji="📦",
+    )
+    view.add_item(button)
+    return view
+
+
+def format_commits_log_snippet(commits: list, repo: str = None, max_commits: int = 2) -> str:
+    """Format a concise commit summary snippet for single-line log messages."""
+    if not commits:
+        return ""
+    count = len(commits)
+    formatted = []
+    for c in commits[:max_commits]:
+        info = parse_commit_info(c, repo=repo)
+        short_sha = info["short_sha"]
+        clean_headline = format_commit_headline(info["headline"], max_len=32)
+        formatted.append(f"`{short_sha}` \"{clean_headline}\"")
+
+    if count == 1:
+        return formatted[0]
+    elif count <= max_commits:
+        return f"{count} commits ({', '.join(formatted)})"
+    else:
+        remaining = count - max_commits
+        return f"{count} commits ({', '.join(formatted)} +{remaining} more)"
+
+
 def create_review_link_view(url: str, count: int) -> discord.ui.View:
     """Create an interactive link button view to inspect extra inline review comments on GitHub."""
     view = discord.ui.View(timeout=None)
