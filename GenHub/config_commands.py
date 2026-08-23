@@ -1,6 +1,7 @@
 import discord
 from redbot.core import commands
 import os
+from .utils import DISCORD_RATE_LIMITER, safe_discord_call
 
 
 def is_genhub_admin():
@@ -783,8 +784,21 @@ class ConfigCommands(commands.Cog):
             lines.append("• Log Channel: ℹ️ Not configured (optional)")
         lines.append("")
 
-        # 4. GitHub API & Rate Limits
-        lines.append("**4. GitHub API & Rate Limits:**")
+        # 4. Discord Rate Limit Coordinator
+        lines.append("**4. Discord Rate Limit Coordinator:**")
+        discord_rl_info = DISCORD_RATE_LIMITER.last_rate_limit_info
+        total_429s = discord_rl_info.get("total_rate_limits", 0)
+        is_paused = discord_rl_info.get("is_paused", False)
+        status_str = "⏸️ In Cooldown" if is_paused else "✅ Normal Operations"
+        lines.append(f"• Coordinator Status: {status_str}")
+        lines.append(f"• Rate Limits Handled & Recovered: `{total_429s}`")
+        if discord_rl_info.get("last_time", 0) > 0:
+            last_dt = datetime.datetime.fromtimestamp(discord_rl_info["last_time"]).strftime("%H:%M:%S UTC")
+            lines.append(f"• Last Rate Limit Event: `{last_dt}` (Cooldown: `{discord_rl_info.get('last_retry_after', 0):.2f}s`)")
+        lines.append("")
+
+        # 5. GitHub API & Rate Limits
+        lines.append("**5. GitHub API & Rate Limits:**")
         token = config.get("github_token")
         if token:
             headers = {"Accept": "application/vnd.github.v3+json", "Authorization": f"token {token}"}
@@ -798,7 +812,7 @@ class ConfigCommands(commands.Cog):
                             limit = core.get("limit", 0)
                             reset_ts = core.get("reset", 0)
                             reset_time = datetime.datetime.fromtimestamp(reset_ts).strftime("%H:%M:%S UTC")
-                            lines.append(f"• Token Status: ✅ Valid & Authenticated")
+                            lines.append("• Token Status: ✅ Valid & Authenticated")
                             lines.append(f"• Rate Limit: `{rem}/{limit}` remaining (Resets at `{reset_time}`)")
                         else:
                             lines.append(f"• Token Status: ❌ API Error (HTTP {resp.status})")
@@ -808,16 +822,20 @@ class ConfigCommands(commands.Cog):
             lines.append("• GitHub Token: ❌ Not set (`!genhub token <token>`)")
         lines.append("")
 
-        # 5. Tracked Repositories
+        # 6. Tracked Repositories
         repos = config.get("allowed_repos", [])
-        lines.append(f"**5. Tracked Repositories ({len(repos)}):**")
+        lines.append(f"**6. Tracked Repositories ({len(repos)}):**")
         if repos:
             for r in repos:
                 lines.append(f"• `{r}`")
         else:
             lines.append("• ⚠️ No repositories configured (`!genhub addrepo <owner/repo>`)")
 
-        await loading_msg.edit(content="\n".join(lines))
+        await safe_discord_call(
+            loading_msg.edit,
+            content="\n".join(lines),
+            operation_name="Update Diagnostics Message",
+        )
 
     # ---------------------------
     # Whitelist Management

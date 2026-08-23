@@ -1,9 +1,12 @@
 */.
 venv
-
-# Python
 venv/
 __pycache__/
 *.pyc
-# VSCode
 .vscode/
+redbot-data/
+.env
+.coverage
+.pytest_cache/
+*.log
+tmp_*

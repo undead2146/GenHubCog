@@ -8,7 +8,11 @@ from unittest.mock import MagicMock
 commands_mod = types.ModuleType("redbot.core.commands")
 
 class Cog:
-    pass
+    @classmethod
+    def listener(cls, name=None):
+        def decorator(func):
+            return func
+        return decorator
 
 def is_owner():
     def decorator(func):

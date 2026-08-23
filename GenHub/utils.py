@@ -1,5 +1,9 @@
 import discord
 import re
+import asyncio
+import time
+import random
+import aiohttp
 
 def clean_github_markdown(text: str, repo: str = None) -> str:
     """Clean and convert GitHub-specific HTML and markdown tags into clean Discord markdown."""
@@ -763,13 +767,205 @@ def create_review_link_view(url: str, count: int) -> discord.ui.View:
     return view
 
 
+class DiscordRateLimiter:
+    """coordinator for discord api rate limits and pacing."""
+
+    def __init__(self):
+        self._global_pause_event = asyncio.Event()
+        self._global_pause_event.set()
+        self._lock = asyncio.Lock()
+        self._thread_creation_locks = {}
+        self._last_thread_creation_time = {}
+        self._min_thread_interval = 1.2
+        self._total_rate_limits = 0
+        self._last_rate_limit_time = 0
+        self._last_retry_after = 0.0
+
+    @property
+    def total_rate_limits(self) -> int:
+        return self._total_rate_limits
+
+    @property
+    def last_rate_limit_info(self) -> dict:
+        return {
+            "total_rate_limits": self._total_rate_limits,
+            "last_time": self._last_rate_limit_time,
+            "last_retry_after": self._last_retry_after,
+            "is_paused": not self._global_pause_event.is_set(),
+        }
+
+    async def wait_if_paused(self):
+        """wait if the rate limiter is currently in a global cooldown."""
+        if not self._global_pause_event.is_set():
+            await self._global_pause_event.wait()
+
+    async def notify_rate_limited(self, retry_after: float, is_global: bool = False, operation_name: str = ""):
+        """trigger rate limit cooldown across all coordinated calls."""
+        async with self._lock:
+            self._total_rate_limits += 1
+            self._last_rate_limit_time = time.time()
+            self._last_retry_after = retry_after
+
+            if is_global or retry_after > 1.0:
+                self._global_pause_event.clear()
+                print(
+                    f"⏳ [Discord Rate Limit] Global pause activated for {retry_after:.2f}s "
+                    f"(Operation: '{operation_name}', Global: {is_global})"
+                )
+
+                async def resume_after_delay():
+                    await asyncio.sleep(retry_after + 0.25)
+                    self._global_pause_event.set()
+                    print("✅ [Discord Rate Limit] Global pause lifted. Resuming operations.")
+
+                asyncio.create_task(resume_after_delay())
+
+    async def pace_thread_creation(self, forum_id: int):
+        """ensure thread creations in a forum channel are paced to avoid route rate limits."""
+        if forum_id not in self._thread_creation_locks:
+            self._thread_creation_locks[forum_id] = asyncio.Lock()
+
+        async with self._thread_creation_locks[forum_id]:
+            await self.wait_if_paused()
+            last_time = self._last_thread_creation_time.get(forum_id, 0)
+            elapsed = time.time() - last_time
+            if elapsed < self._min_thread_interval:
+                wait_duration = self._min_thread_interval - elapsed
+                await asyncio.sleep(wait_duration)
+            self._last_thread_creation_time[forum_id] = time.time()
+
+
+DISCORD_RATE_LIMITER = DiscordRateLimiter()
+
+
+def _extract_discord_retry_after(error: Exception) -> tuple[float, bool]:
+    """extract retry_after in seconds and is_global flag from discord or http exceptions."""
+    if hasattr(error, "retry_after") and getattr(error, "retry_after") is not None:
+        try:
+            return float(getattr(error, "retry_after")), getattr(error, "is_global", False)
+        except (ValueError, TypeError):
+            pass
+
+    if isinstance(error, discord.HTTPException):
+        response = getattr(error, "response", None)
+        if response:
+            headers = getattr(response, "headers", {})
+            if headers:
+                retry_hdr = headers.get("Retry-After") or headers.get("retry-after")
+                if retry_hdr:
+                    try:
+                        return float(retry_hdr), headers.get("X-RateLimit-Global", "false").lower() == "true"
+                    except (ValueError, TypeError):
+                        pass
+
+    err_str = str(error)
+    match = re.search(r"retry_after[^\d]*(\d+(?:\.\d+)?)", err_str, re.IGNORECASE)
+    if match:
+        try:
+            return float(match.group(1)), "global" in err_str.lower()
+        except (ValueError, TypeError):
+            pass
+
+    return 0.0, False
+
+
+async def safe_discord_call(
+    func,
+    *args,
+    max_retries: int = 6,
+    base_delay: float = 1.0,
+    max_delay: float = 60.0,
+    operation_name: str = "Discord Operation",
+    allow_404: bool = False,
+    allow_403: bool = False,
+    **kwargs,
+):
+    """execute a discord api coroutine with automatic rate limit detection, exponential backoff, and retry handling."""
+    for attempt in range(max_retries):
+        await DISCORD_RATE_LIMITER.wait_if_paused()
+
+        try:
+            if asyncio.iscoroutine(func):
+                result = await func
+            else:
+                res = func(*args, **kwargs)
+                if asyncio.iscoroutine(res) or asyncio.isfuture(res) or hasattr(res, "__await__"):
+                    result = await res
+                else:
+                    result = res
+            return result
+        except discord.NotFound:
+            if allow_404:
+                return None
+            raise
+        except discord.Forbidden:
+            if allow_403:
+                return None
+            raise
+        except Exception as e:
+            is_rate_limit = False
+            retry_after = 0.0
+            is_global = False
+
+            if isinstance(e, getattr(discord, "RateLimited", tuple())):
+                is_rate_limit = True
+                retry_after, is_global = _extract_discord_retry_after(e)
+            elif isinstance(e, discord.HTTPException) and getattr(e, "status", None) == 429:
+                is_rate_limit = True
+                retry_after, is_global = _extract_discord_retry_after(e)
+            elif "429" in str(e) or "rate limit" in str(e).lower() or "too many requests" in str(e).lower():
+                is_rate_limit = True
+                retry_after, is_global = _extract_discord_retry_after(e)
+
+            is_transient = (
+                isinstance(e, (aiohttp.ClientOSError, aiohttp.ServerDisconnectedError, asyncio.TimeoutError, ConnectionResetError))
+                or (isinstance(e, discord.HTTPException) and getattr(e, "status", 0) in (500, 502, 503, 504))
+            )
+
+            if not is_rate_limit and not is_transient:
+                raise e
+
+            if attempt >= max_retries - 1:
+                print(f"❌ [Discord API] Max retries ({max_retries}) exhausted for '{operation_name}': {e}")
+                raise e
+
+            if retry_after <= 0:
+                calculated_delay = min(base_delay * (2 ** attempt), max_delay)
+                jitter = random.uniform(0.1, 0.6)
+                wait_time = calculated_delay + jitter
+            else:
+                wait_time = retry_after + 0.25
+
+            tag = "Rate Limit (429)" if is_rate_limit else f"Transient Error ({type(e).__name__})"
+            print(
+                f"⏳ [Discord {tag}] {operation_name} throttled/failed. "
+                f"Waiting {wait_time:.2f}s before retry ({attempt + 1}/{max_retries})... Error: {e}"
+            )
+
+            if is_rate_limit:
+                await DISCORD_RATE_LIMITER.notify_rate_limited(wait_time, is_global=is_global, operation_name=operation_name)
+
+            await asyncio.sleep(wait_time)
+
+    return None
+
+
 async def send_message(channel, content: str = "", prefix: str = "", embed: discord.Embed = None, view: discord.ui.View = None):
-    """Send a message or embed with optional interactive View, splitting long text into chunks if needed."""
+    """send a message or embed with optional interactive view, splitting long text into chunks if needed."""
     if embed:
         if view:
-            await channel.send(embed=embed, view=view)
+            await safe_discord_call(
+                channel.send,
+                embed=embed,
+                view=view,
+                operation_name=f"Send Embed with View to #{getattr(channel, 'name', getattr(channel, 'id', 'unknown'))}"
+            )
         else:
-            await channel.send(embed=embed)
+            await safe_discord_call(
+                channel.send,
+                embed=embed,
+                operation_name=f"Send Embed to #{getattr(channel, 'name', getattr(channel, 'id', 'unknown'))}"
+            )
         return
 
     limit = 2000
@@ -781,6 +977,8 @@ async def send_message(channel, content: str = "", prefix: str = "", embed: disc
         prefix = prefix[: limit - 3] + "..."
 
     chunks = [content[i : i + limit] for i in range(0, len(content), limit)]
+    if not chunks:
+        chunks = [""]
 
     for i, chunk in enumerate(chunks):
         is_last = (i == len(chunks) - 1)
@@ -788,21 +986,38 @@ async def send_message(channel, content: str = "", prefix: str = "", embed: disc
         if i == 0 and prefix:
             available = limit - len(prefix)
             if len(chunk) > available:
-                await channel.send(
-                    prefix + chunk[:available], allowed_mentions=allowed_mentions
+                await safe_discord_call(
+                    channel.send,
+                    prefix + chunk[:available],
+                    allowed_mentions=allowed_mentions,
+                    operation_name=f"Send Chunk 1a to #{getattr(channel, 'name', getattr(channel, 'id', 'unknown'))}"
                 )
                 remainder = chunk[available:]
                 for j in range(0, len(remainder), limit):
                     sub_last = is_last and (j + limit >= len(remainder))
-                    await channel.send(
-                        remainder[j : j + limit], allowed_mentions=allowed_mentions, view=(view if sub_last else None)
+                    await safe_discord_call(
+                        channel.send,
+                        remainder[j : j + limit],
+                        allowed_mentions=allowed_mentions,
+                        view=(view if sub_last else None),
+                        operation_name=f"Send Chunk 1b to #{getattr(channel, 'name', getattr(channel, 'id', 'unknown'))}"
                     )
             else:
-                await channel.send(
-                    prefix + chunk, allowed_mentions=allowed_mentions, view=v
+                await safe_discord_call(
+                    channel.send,
+                    prefix + chunk,
+                    allowed_mentions=allowed_mentions,
+                    view=v,
+                    operation_name=f"Send Message Chunk {i+1}/{len(chunks)} to #{getattr(channel, 'name', getattr(channel, 'id', 'unknown'))}"
                 )
         else:
-            await channel.send(chunk, allowed_mentions=allowed_mentions, view=v)
+            await safe_discord_call(
+                channel.send,
+                chunk,
+                allowed_mentions=allowed_mentions,
+                view=v,
+                operation_name=f"Send Message Chunk {i+1}/{len(chunks)} to #{getattr(channel, 'name', getattr(channel, 'id', 'unknown'))}"
+            )
 
 
 def get_role_mention(guild, role_id: int):
@@ -995,16 +1210,43 @@ async def find_comment_message(thread, comment_url: str, author_login: str = Non
     return None
 
 
+_FORUM_TAG_CACHE = {}
+
+
 async def get_or_create_tag(forum, name):
-    """Find or create a tag by name (case-insensitive)."""
-    for tag in forum.available_tags:
-        if tag.name.lower() == name.lower():
-            return tag
-    try:
-        return await forum.create_tag(name=name, moderated=False)
-    except Exception as e:
-        print(f"⚠️ Failed to create tag '{name}' in {forum.name}: {e}")
+    """find or create a tag by name case-insensitively with caching and rate limit safety."""
+    if not forum or not name:
         return None
+
+    forum_id = getattr(forum, "id", None)
+    name_lower = str(name).strip().lower()
+
+    for tag in getattr(forum, "available_tags", []):
+        if getattr(tag, "name", "").lower() == name_lower:
+            if forum_id:
+                _FORUM_TAG_CACHE.setdefault(forum_id, {})[name_lower] = tag
+            return tag
+
+    if forum_id and forum_id in _FORUM_TAG_CACHE and name_lower in _FORUM_TAG_CACHE[forum_id]:
+        return _FORUM_TAG_CACHE[forum_id][name_lower]
+
+    try:
+        new_tag = await safe_discord_call(
+            forum.create_tag,
+            name=name,
+            moderated=False,
+            max_retries=3,
+            operation_name=f"Create Tag '{name}' in {getattr(forum, 'name', forum_id)}",
+            allow_403=True,
+        )
+        if new_tag:
+            if forum_id:
+                _FORUM_TAG_CACHE.setdefault(forum_id, {})[name_lower] = new_tag
+            return new_tag
+    except Exception as e:
+        print(f"⚠️ Failed to create tag '{name}' in {getattr(forum, 'name', forum_id)}: {e}")
+
+    return None
 
 
 async def get_issue_tags(forum, issue):
@@ -1048,21 +1290,26 @@ async def get_pr_tags(forum, pr):
 
 
 async def update_status_tag(thread, new_status_name):
-    """Replace status tag while preserving repo tag."""
-    forum = thread.parent
+    """replace status tag while preserving repo tag with rate limit safety."""
+    forum = getattr(thread, "parent", None)
+    if not forum:
+        return
     new_status_tag = await get_or_create_tag(forum, new_status_name)
     if not new_status_tag:
         return
-    current_tags = list(thread.applied_tags)
+    current_tags = list(getattr(thread, "applied_tags", []))
     status_names = {"open", "closed", "merged", "active"}
-    current_tags = [t for t in current_tags if t.name.lower() not in status_names]
+    current_tags = [t for t in current_tags if getattr(t, "name", "").lower() not in status_names]
     current_tags.append(new_status_tag)
-    await thread.edit(applied_tags=current_tags)
+    await safe_discord_call(
+        thread.edit,
+        applied_tags=current_tags,
+        operation_name=f"Update Status Tag to '{new_status_name}' on Thread {getattr(thread, 'name', getattr(thread, 'id', 'unknown'))}"
+    )
 
 
 async def find_thread(bot, forum_id, repo_full_name, topic_number, thread_cache):
-    """Find an existing thread by repo + number."""
-    # First check cache for a valid thread
+    """find an existing thread by repo and number."""
     keys_to_try = [
         (forum_id, repo_full_name, topic_number),
         (str(forum_id), repo_full_name, topic_number),
@@ -1071,45 +1318,45 @@ async def find_thread(bot, forum_id, repo_full_name, topic_number, thread_cache)
     for k in keys_to_try:
         if k in thread_cache:
             cached = thread_cache[k]
-            # If we stored a thread object, do a quick validation
             if hasattr(cached, "id"):
                 try:
-                    # Quick validation - try to access a property that would fail if deleted
-                    if hasattr(cached, 'name'):
-                        _ = cached.name  # This should fail if the thread is deleted
-                        # Also check if the thread is accessible by trying to get its ID
+                    if hasattr(cached, "name"):
+                        _ = cached.name
                         _ = cached.id
                     return cached
                 except (AttributeError, discord.NotFound, discord.Forbidden):
-                    # Thread is invalid/stale/deleted, remove from cache
                     print(f"🗑️ Removing stale thread #{topic_number} from cache")
                     del thread_cache[k]
                     continue
 
     forum = bot.get_channel(forum_id)
-    if not forum and hasattr(bot, "fetch_channel"):
+    if not forum and hasattr(bot, "fetch_channel") and callable(getattr(bot, "fetch_channel", None)):
         try:
-            forum = await bot.fetch_channel(forum_id)
+            fetch_res = bot.fetch_channel(forum_id)
+            if asyncio.iscoroutine(fetch_res) or asyncio.isfuture(fetch_res):
+                forum = await safe_discord_call(
+                    lambda: fetch_res,
+                    operation_name=f"Fetch Channel {forum_id}",
+                    allow_404=True,
+                    allow_403=True,
+                )
         except Exception:
             pass
 
     if not forum:
         return None
 
-    # Get repository short name for pattern matching
-    repo_short_name = repo_full_name.split('/')[-1]
+    repo_short_name = repo_full_name.split("/")[-1]
 
-    # Try patterns: first with new format, then legacy patterns for backward compatibility
     patterns = [
-        rf"\[GH\] \[#{topic_number}\](?:\s|$)",  # New format: [GH] [#NUMBER]
-        rf"「{re.escape(repo_short_name)}#{topic_number}」(?:\D|$)",  # Old format with corner brackets
+        rf"\[GH\] \[#{topic_number}\](?:\s|$)",
+        rf"「{re.escape(repo_short_name)}#{topic_number}」(?:\D|$)",
         rf"{re.escape(repo_short_name)}#{topic_number}(?:\D|$)",
-        rf"「#{topic_number}」(?:\D|$)",  # Legacy pattern for backward compatibility
+        rf"「#{topic_number}」(?:\D|$)",
         rf"#{topic_number}(?:\D|$)",
         rf"{topic_number}(?:\D|$)",
     ]
 
-    # Collect candidate threads from forum and guild
     candidate_threads = []
     threads_attr = getattr(forum, "threads", [])
     try:
@@ -1158,14 +1405,12 @@ async def find_thread(bot, forum_id, repo_full_name, topic_number, thread_cache)
 async def get_or_create_thread(
     bot, forum_id, repo_full_name, number, title, url, tags, thread_cache, initial_content=None
 ):
-    # First try to find an existing thread
+    """find or create a thread for an issue or pull request with rate limit pacing and safety."""
     existing = await find_thread(bot, forum_id, repo_full_name, number, thread_cache)
     if existing:
         print(f"📝 Found existing thread #{number} for {repo_full_name}")
-        # Check if thread is archived - if so, recreate as active for reconcile
-        if hasattr(existing, 'archived') and existing.archived:
+        if hasattr(existing, "archived") and existing.archived:
             print(f"ℹ️ Found archived thread #{number}, recreating as active")
-            # Remove from cache and treat as not found to force recreation
             keys_to_remove = [
                 (forum_id, repo_full_name, number),
                 (str(forum_id), repo_full_name, number),
@@ -1173,16 +1418,13 @@ async def get_or_create_thread(
             ]
             for key in keys_to_remove:
                 thread_cache.pop(key, None)
-            existing = None  # Force recreation
+            existing = None
         else:
-            # Validate thread is still accessible with more robust checks
             try:
                 _ = existing.id
-
-                if hasattr(existing, 'channel'):
+                if hasattr(existing, "channel"):
                     _ = existing.channel
-
-                if hasattr(existing, 'name'):
+                if hasattr(existing, "name"):
                     _ = existing.name
 
                 try:
@@ -1191,11 +1433,14 @@ async def get_or_create_thread(
                 except (discord.NotFound, discord.Forbidden):
                     raise discord.NotFound("Thread history inaccessible")
 
-                # Update name if it doesn't match expected (capped to 100 chars)
                 expected_name = f"[GH] [#{number}] {title}"[:100]
-                if hasattr(existing, 'name') and existing.name != expected_name:
+                if hasattr(existing, "name") and existing.name != expected_name:
                     try:
-                        await existing.edit(name=expected_name)
+                        await safe_discord_call(
+                            existing.edit,
+                            name=expected_name,
+                            operation_name=f"Update Thread Name for {repo_full_name}#{number}"
+                        )
                         print(f"📝 Updated thread name for #{number}")
                     except (discord.Forbidden, discord.NotFound):
                         print(f"⚠️ Could not update thread name for #{number}, recreating")
@@ -1233,9 +1478,16 @@ async def get_or_create_thread(
         return existing, False
 
     forum = bot.get_channel(forum_id)
-    if not forum and hasattr(bot, "fetch_channel"):
+    if not forum and hasattr(bot, "fetch_channel") and callable(getattr(bot, "fetch_channel", None)):
         try:
-            forum = await bot.fetch_channel(forum_id)
+            fetch_res = bot.fetch_channel(forum_id)
+            if asyncio.iscoroutine(fetch_res) or asyncio.isfuture(fetch_res):
+                forum = await safe_discord_call(
+                    lambda: fetch_res,
+                    operation_name=f"Fetch Channel {forum_id}",
+                    allow_404=True,
+                    allow_403=True,
+                )
         except Exception:
             pass
 
@@ -1243,24 +1495,30 @@ async def get_or_create_thread(
         print(f"⚠️ Could not find forum {forum_id}")
         return None, False
 
-    # Create thread name with repository, capped strictly to Discord's 100 character maximum
     thread_name = f"[GH] [#{number}] {title}"[:100]
-
     print(f"🔄 Creating new thread for {repo_full_name}#{number}")
     try:
         content = initial_content if initial_content else f"🆕 Issue created: [{title}]({url})\n👤 By: Unknown"
 
-        thread_with_msg = await forum.create_thread(
+        # pace forum thread creations to avoid route rate limits
+        await DISCORD_RATE_LIMITER.pace_thread_creation(getattr(forum, "id", forum_id))
+
+        thread_with_msg = await safe_discord_call(
+            forum.create_thread,
             name=thread_name,
             content=content,
             applied_tags=tags,
+            operation_name=f"Create Forum Thread for {repo_full_name}#{number}"
         )
         print(f"✅ Created new thread for {repo_full_name}#{number}")
     except discord.Forbidden:
-        print(f"⚠️ Missing permissions to create thread in {forum.name}")
+        print(f"⚠️ Missing permissions to create thread in {getattr(forum, 'name', forum_id)}")
         return None, False
     except Exception as e:
         print(f"⚠️ Failed to create thread for {repo_full_name}#{number}: {e}")
+        return None, False
+
+    if not thread_with_msg:
         return None, False
 
     thread = getattr(thread_with_msg, "thread", thread_with_msg)

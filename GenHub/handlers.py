@@ -26,6 +26,8 @@ from .utils import (
     create_commits_link_view,
     format_commits_log_snippet,
     format_pr_chat_commit_line,
+    safe_discord_call,
+    DISCORD_RATE_LIMITER,
 )
 
 GITHUB_ISSUE_RE = re.compile(
@@ -34,37 +36,40 @@ GITHUB_ISSUE_RE = re.compile(
 
 
 class RateLimiter:
-    """GitHub API rate limiter with exponential backoff."""
-    
+    """github api rate limiter with primary and secondary rate limit backoff."""
+
     def __init__(self):
         self.last_request_time = 0
-        self.min_interval = 0.75  # Minimum seconds between requests
+        self.min_interval = 0.6
         self.remaining = 5000
         self.reset_time = 0
-        
+        self._lock = asyncio.Lock()
+
     async def wait(self):
-        """Wait if necessary to respect rate limits."""
-        # Wait for minimum interval
-        now = time.time()
-        elapsed = now - self.last_request_time
-        if elapsed < self.min_interval:
-            await asyncio.sleep(self.min_interval - elapsed)
-        
-        # Check if we're approaching rate limit
-        if self.remaining < 100:
-            wait_time = max(0, self.reset_time - time.time())
-            if wait_time > 0:
-                print(f"⏳ Rate limit low ({self.remaining} remaining), waiting {wait_time:.0f}s...")
-                await asyncio.sleep(wait_time + 1)
-        
-        self.last_request_time = time.time()
-    
+        """wait if necessary to respect rate limits."""
+        async with self._lock:
+            now = time.time()
+            elapsed = now - self.last_request_time
+            if elapsed < self.min_interval:
+                await asyncio.sleep(self.min_interval - elapsed)
+
+            if self.remaining < 25:
+                wait_time = max(0, self.reset_time - time.time())
+                if wait_time > 0:
+                    print(f"⏳ [GitHub Rate Limit] {self.remaining} remaining. Waiting {wait_time:.0f}s for reset...")
+                    await asyncio.sleep(wait_time + 1)
+
+            self.last_request_time = time.time()
+
     def update_from_headers(self, headers):
-        """Update rate limit info from response headers."""
+        """update rate limit info from response headers."""
         try:
-            self.remaining = int(headers.get('X-RateLimit-Remaining', 5000))
-            self.reset_time = int(headers.get('X-RateLimit-Reset', 0))
-            print(f"📊 Rate limit: {self.remaining} requests remaining")
+            if "X-RateLimit-Remaining" in headers:
+                self.remaining = int(headers.get("X-RateLimit-Remaining", 5000))
+            if "X-RateLimit-Reset" in headers:
+                self.reset_time = int(headers.get("X-RateLimit-Reset", 0))
+            if self.remaining <= 100:
+                print(f"📊 [GitHub Rate Limit] {self.remaining} requests remaining")
         except (ValueError, TypeError):
             pass
 
@@ -236,27 +241,38 @@ class GitHubEventHandlers:
         return candidates[0] if candidates else None
 
     async def _send_to_log_channel(self, formatted_message: str):
-        """Helper to send a formatted message to the configured log channel with embeds suppressed."""
+        """helper to send a formatted message to the configured log channel with embeds suppressed."""
         log_channel_id = await self._get_config_id("log_channel_id")
         if log_channel_id:
             channel = await self._resolve_target_channel(log_channel_id)
             if channel:
                 try:
+                    await safe_discord_call(
+                        channel.send,
+                        formatted_message[:1950],
+                        suppress_embeds=True,
+                        operation_name=f"Send Log Message to #{getattr(channel, 'name', log_channel_id)}",
+                    )
+                except (TypeError, discord.HTTPException):
                     try:
-                        await channel.send(formatted_message[:1950], suppress_embeds=True)
-                    except (TypeError, discord.HTTPException):
-                        await channel.send(formatted_message[:1950])
+                        await safe_discord_call(
+                            channel.send,
+                            formatted_message[:1950],
+                            operation_name=f"Send Log Message (Fallback) to #{getattr(channel, 'name', log_channel_id)}",
+                        )
+                    except Exception as e:
+                        print(f"⚠️ Failed to send log to channel: {e}")
                 except Exception as e:
                     print(f"⚠️ Failed to send log to channel: {e}")
 
     async def log_error(self, message: str):
-        """Log errors to console and Discord log channel (Level: errors)."""
+        """log errors to console and discord log channel."""
         print(f"❌ GenHub Error: {message}")
         if await self._should_log("error"):
             await self._send_to_log_channel(f"❌ **GenHub Error:**\n```{message[:1900]}```")
 
     async def log_info(self, message: str):
-        """Log operational notices to console and Discord log channel (Level: info)."""
+        """log operational notices to console and discord log channel."""
         print(f"ℹ️ {message}")
         if await self._should_log("info"):
             badge_emojis = ("🆕", "🔄", "💬", "🏷️", "🚀", "🟣", "❌", "🎉", "📦", "✏️", "🗑️", "📝", "⚡", "📌", "🔒", "🔓", "📋", "👤", "🤖", "ℹ️", "✅", "⚠️", "🏓")
@@ -264,7 +280,7 @@ class GitHubEventHandlers:
             await self._send_to_log_channel(f"{prefix}{message}")
 
     async def log_audit(self, message: str):
-        """Log audit notices to console and Discord log channel (Level: info/audit)."""
+        """log audit notices to console and discord log channel."""
         print(f"📋 {message}")
         if await self._should_log("audit"):
             badge_emojis = ("📋", "🏓", "🔒", "⚙️", "ℹ️")
@@ -272,34 +288,80 @@ class GitHubEventHandlers:
             await self._send_to_log_channel(f"{prefix}{message}")
 
     async def log_debug(self, message: str):
-        """Log verbose debugging info to console and Discord log channel (Level: verbose/debug/all)."""
+        """log verbose debugging info to console and discord log channel."""
         print(f"🔍 {message}")
         if await self._should_log("debug"):
             badge_emojis = ("🔍", "ℹ️", "📦", "💬", "📝", "🔄", "✏️", "🗑️")
             prefix = "" if any(message.startswith(e) for e in badge_emojis) else "🔍 "
             await self._send_to_log_channel(f"{prefix}{message}")
 
-    async def _make_github_request(self, session, url, method='GET'):
-        """Make a GitHub API request with rate limiting and error handling."""
-        await self.rate_limiter.wait()
-        
-        try:
-            async with session.request(method, url) as resp:
-                self.rate_limiter.update_from_headers(resp.headers)
-                
-                # Handle rate limit exceeded
-                if resp.status == 403 and 'rate limit' in (await resp.text()).lower():
-                    reset_time = int(resp.headers.get('X-RateLimit-Reset', 0))
-                    wait_time = max(0, reset_time - time.time()) + 5
-                    print(f"⏳ Rate limit exceeded, waiting {wait_time:.0f}s...")
-                    await asyncio.sleep(wait_time)
-                    # Retry once
-                    return await self._make_github_request(session, url, method)
-                
-                return resp.status, await resp.json() if resp.status == 200 else None
-        except Exception as e:
-            print(f"❌ Request failed for {url}: {e}")
+    async def _make_github_request(self, session, url, method="GET", max_retries=5):
+        """make a github api request with comprehensive rate limit detection and backoff recovery."""
+        req_fn = getattr(session, "request", None) or getattr(session, "get", None)
+        if not req_fn:
             return None, None
+
+        for attempt in range(max_retries):
+            await self.rate_limiter.wait()
+
+            try:
+                cm = req_fn(method, url) if hasattr(session, "request") else req_fn(url)
+                async with cm as resp:
+                    headers = getattr(resp, "headers", {}) or {}
+                    self.rate_limiter.update_from_headers(headers)
+
+                    # primary or secondary rate limits
+                    if resp.status == 429 or (resp.status == 403 and headers.get("X-RateLimit-Remaining") == "0"):
+                        reset_time = int(headers.get("X-RateLimit-Reset", 0))
+                        retry_after_hdr = headers.get("Retry-After")
+                        if retry_after_hdr:
+                            try:
+                                wait_time = float(retry_after_hdr) + 1
+                            except ValueError:
+                                wait_time = max(5, reset_time - time.time() + 2)
+                        elif reset_time > 0:
+                            wait_time = max(5, reset_time - time.time() + 2)
+                        else:
+                            wait_time = min(5 * (2 ** attempt), 60)
+
+                        print(f"⏳ [GitHub Rate Limit] Hit HTTP {resp.status}, waiting {wait_time:.0f}s before retry ({attempt + 1}/{max_retries})...")
+                        await asyncio.sleep(wait_time)
+                        continue
+
+                    # secondary abuse rate limit
+                    if resp.status == 403:
+                        text = await resp.text() if hasattr(resp, "text") and callable(resp.text) else ""
+                        if isinstance(text, str) and ("secondary rate limit" in text.lower() or "abuse" in text.lower() or "rate limit" in text.lower()):
+                            retry_after_hdr = headers.get("Retry-After")
+                            if retry_after_hdr:
+                                try:
+                                    wait_time = float(retry_after_hdr) + 1
+                                except ValueError:
+                                    wait_time = min(10 * (2 ** attempt), 120)
+                            else:
+                                wait_time = min(10 * (2 ** attempt), 120)
+                            print(f"⏳ [GitHub Secondary Rate Limit] Triggered on {url}. Waiting {wait_time:.0f}s before retry ({attempt + 1}/{max_retries})...")
+                            await asyncio.sleep(wait_time)
+                            continue
+
+                    # server errors
+                    if resp.status in (500, 502, 503, 504):
+                        wait_time = min(2 * (2 ** attempt), 30)
+                        print(f"⚠️ [GitHub Server Error] HTTP {resp.status} for {url}. Waiting {wait_time:.0f}s before retry ({attempt + 1}/{max_retries})...")
+                        await asyncio.sleep(wait_time)
+                        continue
+
+                    return resp.status, await resp.json() if resp.status == 200 and hasattr(resp, "json") else None
+            except (aiohttp.ClientError, asyncio.TimeoutError, ConnectionError) as e:
+                wait_time = min(2 * (2 ** attempt), 30)
+                print(f"❌ [GitHub Request Exception] {url}: {e}. Retrying in {wait_time}s ({attempt + 1}/{max_retries})...")
+                await asyncio.sleep(wait_time)
+            except Exception as e:
+                print(f"❌ [GitHub Unhandled Exception] {url}: {e}")
+                return None, None
+
+        print(f"❌ [GitHub Request Failed] Exhausted {max_retries} attempts for {url}")
+        return None, None
 
     async def _get_auth_headers(self) -> dict:
         """Construct authorization and accept headers for GitHub API requests."""
@@ -573,7 +635,11 @@ class GitHubEventHandlers:
             expected_name = f"[GH] [#{number}] {title}"[:100]
             if hasattr(thread, "name") and thread.name != expected_name:
                 try:
-                    await thread.edit(name=expected_name)
+                    await safe_discord_call(
+                        thread.edit,
+                        name=expected_name,
+                        operation_name=f"Update Thread Name on Issue Edit {repo_full_name}#{number}",
+                    )
                 except Exception as e:
                     print(f"⚠️ Could not update thread name on edit: {e}")
 
@@ -715,7 +781,11 @@ class GitHubEventHandlers:
             expected_name = f"[GH] [#{number}] {title}"[:100]
             if hasattr(thread, "name") and thread.name != expected_name:
                 try:
-                    await thread.edit(name=expected_name)
+                    await safe_discord_call(
+                        thread.edit,
+                        name=expected_name,
+                        operation_name=f"Update Thread Name on PR Edit {repo_full_name}#{number}",
+                    )
                 except Exception as e:
                     print(f"⚠️ Could not update thread name on edit: {e}")
 
@@ -937,7 +1007,12 @@ class GitHubEventHandlers:
                 )
                 view = create_review_link_view(url, 1) if is_bot else None
                 try:
-                    await msg.edit(embed=embed, view=view)
+                    await safe_discord_call(
+                        msg.edit,
+                        embed=embed,
+                        view=view,
+                        operation_name=f"Update Comment in #{number} for {author}",
+                    )
                     print(f"📝 Live-updated Discord comment in thread #{number} for {author}")
                 except Exception as e:
                     print(f"⚠️ Failed to edit comment in thread #{number}: {e}")
@@ -1053,7 +1128,11 @@ class GitHubEventHandlers:
                     repo=repo_full_name,
                 )
                 try:
-                    await msg.edit(embed=embed)
+                    await safe_discord_call(
+                        msg.edit,
+                        embed=embed,
+                        operation_name=f"Update Review Comment in PR #{pr_number} for {comment_author}",
+                    )
                     print(f"📝 Live-updated review comment in PR #{pr_number} for {comment_author}")
                 except Exception as e:
                     print(f"⚠️ Failed to edit review comment in PR #{pr_number}: {e}")
@@ -1138,11 +1217,15 @@ class GitHubEventHandlers:
             )
             view = create_review_link_view(ent["url"], comment_count) if comment_count > 0 else create_review_link_view(ent["url"], 1)
 
-            # Check if a message from this bot already exists in the thread
             existing_msg = await find_comment_message(thread, ent["url"], ent["author"])
             if existing_msg:
                 try:
-                    await existing_msg.edit(embed=embed, view=view)
+                    await safe_discord_call(
+                        existing_msg.edit,
+                        embed=embed,
+                        view=view,
+                        operation_name=f"Update Bot Review in PR #{pr_number} for {ent['author']}",
+                    )
                     print(f"📝 Live-updated existing bot review in PR #{pr_number} for {ent['author']} ({comment_count} comments)")
                     return
                 except Exception as e:
@@ -1285,7 +1368,11 @@ class GitHubEventHandlers:
         desired = set(t.name.lower() for t in (tags or []))
         if current != desired and not created:
             try:
-                await thread.edit(applied_tags=tags or [])
+                await safe_discord_call(
+                    thread.edit,
+                    applied_tags=tags or [],
+                    operation_name=f"Update Reconciled Tags for {repo}#{number}",
+                )
             except Exception as e:
                 await self.log_error(f"⚠️ Could not update tags for {repo}#{number}: {e}")
 
@@ -1569,12 +1656,12 @@ class GitHubEventHandlers:
                 await ctx.send(f"ℹ️ No {item_type.lower()} to reconcile for `{repo}`.")
             return
 
-        await self.log_info(f"⚡ Reconciling **{total_count} open {item_type.lower()}** for `{repo}` in parallel (4 workers)...")
+        await self.log_info(f"⚡ Reconciling **{total_count} open {item_type.lower()}** for `{repo}` with rate limit protection (2 paced workers)...")
         if ctx:
-            await ctx.send(f"⚡ Reconciling **{total_count} {item_type.lower()}** for `{repo}` in parallel (4 concurrent workers)...")
+            await ctx.send(f"⚡ Reconciling **{total_count} {item_type.lower()}** for `{repo}` with rate limit protection (2 paced workers)...")
 
-        # Bounded parallel workers with Semaphore
-        concurrency_limit = 4
+        # Bounded parallel workers with Semaphore and pacing
+        concurrency_limit = 2
         sem = asyncio.Semaphore(concurrency_limit)
         processed_count = 0
         progress_lock = asyncio.Lock()
@@ -1586,14 +1673,21 @@ class GitHubEventHandlers:
             async with sem:
                 if self.reconcile_cancelled:
                     return
-                try:
-                    await self._reconcile_item(session, forum, repo, item, is_pr, ctx, idx, repo_name)
-                except Exception as e:
-                    await self.log_error(f"❌ Error reconciling {item_type.lower()[:-1]} {repo}#{item.get('number')}: {e}")
+                for attempt in range(3):
+                    if self.reconcile_cancelled:
+                        return
+                    try:
+                        await self._reconcile_item(session, forum, repo, item, is_pr, ctx, idx, repo_name)
+                        break
+                    except Exception as e:
+                        if attempt < 2 and not self.reconcile_cancelled:
+                            await asyncio.sleep(1.5 * (attempt + 1))
+                        else:
+                            await self.log_error(f"❌ Error reconciling {item_type.lower()[:-1]} {repo}#{item.get('number')}: {e}")
 
                 async with progress_lock:
                     processed_count += 1
-                    if ctx and not self.reconcile_cancelled and (processed_count % 15 == 0 or processed_count == total_count):
+                    if ctx and not self.reconcile_cancelled and (processed_count % 10 == 0 or processed_count == total_count):
                         pct = int((processed_count / total_count) * 100)
                         try:
                             await ctx.send(f"📊 **Progress ({repo_name} {item_type}):** {processed_count}/{total_count} processed ({pct}%)")

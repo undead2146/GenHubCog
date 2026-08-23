@@ -2,10 +2,12 @@ import asyncio
 from redbot.core import commands, Config
 from redbot.core.bot import Red
 
+import discord
 from .webhook import WebhookServer
 from .handlers import GitHubEventHandlers
 from .config_commands import ConfigCommands
 from .slash_commands import SlashCommands
+from .utils import safe_discord_call
 
 
 class GenHub(commands.Cog):
@@ -37,6 +39,22 @@ class GenHub(commands.Cog):
         self.webhook = WebhookServer(self)
         self.handlers = GitHubEventHandlers(self)
 
+    @commands.Cog.listener()
+    async def on_guild_join(self, guild: discord.Guild):
+        """handle bot joining a new server: sync slash commands and initialize safely."""
+        print(f"🎉 GenHub joined new guild: {getattr(guild, 'name', 'unknown')} ({getattr(guild, 'id', 'unknown')})")
+        try:
+            if hasattr(self.bot, "tree") and hasattr(self.bot.tree, "sync"):
+                await safe_discord_call(
+                    self.bot.tree.sync,
+                    guild=guild,
+                    max_retries=3,
+                    operation_name=f"Sync Slash Commands on Guild Join for {getattr(guild, 'name', 'unknown')}",
+                )
+                print(f"✅ GenHub slash commands synced to new guild: {getattr(guild, 'name', 'unknown')} ({getattr(guild, 'id', 'unknown')})")
+        except Exception as e:
+            print(f"⚠️ Failed to sync slash commands on guild join for {getattr(guild, 'name', 'unknown')}: {e}")
+
     async def cog_load(self):
         # Start webhook server
         self.task = asyncio.create_task(self.webhook.start())
@@ -44,16 +62,23 @@ class GenHub(commands.Cog):
         # Load thread cache
         self.thread_cache = await self.config.thread_cache()
 
-        # Sync slash commands
-        try:
+        # Sync slash commands with pacing to avoid Discord 429 rate limits
+        if hasattr(self.bot, "guilds") and hasattr(self.bot, "tree"):
             for guild in self.bot.guilds:
-                await self.bot.tree.sync(guild=guild)
-                print(
-                    f"✅ GenHub slash commands synced to guild: "
-                    f"{guild.name} ({guild.id})"
-                )
-        except Exception as e:
-            print(f"⚠️ Failed to sync slash commands: {e}")
+                try:
+                    await safe_discord_call(
+                        self.bot.tree.sync,
+                        guild=guild,
+                        max_retries=3,
+                        operation_name=f"Sync Slash Commands on Startup for {getattr(guild, 'name', 'unknown')}",
+                    )
+                    print(
+                        f"✅ GenHub slash commands synced to guild: "
+                        f"{getattr(guild, 'name', 'unknown')} ({getattr(guild, 'id', 'unknown')})"
+                    )
+                except Exception as e:
+                    print(f"⚠️ Failed to sync slash commands for {getattr(guild, 'name', 'unknown')}: {e}")
+                await asyncio.sleep(0.3)
 
         # Register text commands cog
         try:
@@ -62,7 +87,6 @@ class GenHub(commands.Cog):
             pass
 
         # Register slash commands
-        import discord
         slash_handler = SlashCommands(self)
         self.bot.tree.add_command(
             discord.app_commands.Command(
